@@ -9339,6 +9339,142 @@ class InterfaceGNV:
 
         return
 		
+# =============================================================================
+# PARTE 441
+# EXPORTAR XML
+# =============================================================================
+
+        arquivo_xml = arquivo.replace(
+
+            ".xlsx",
+
+            ".xml"
+
+        )
+
+# =============================================================================
+# PARTE 442
+# CABEÇALHO XML
+# =============================================================================
+
+        with open(
+
+            arquivo_xml,
+
+            "w",
+
+            encoding="utf-8"
+
+        ) as xml:
+
+            xml.write(
+
+                "<?xml version='1.0' encoding='UTF-8'?>\n"
+
+            )
+
+            xml.write(
+
+                "<abastecimentos>\n"
+
+            )
+
+# =============================================================================
+# PARTE 443
+# REGISTROS XML
+# =============================================================================
+
+            for registro in registros:
+
+                xml.write(
+
+                    "    <abastecimento>\n"
+
+                )
+
+# =============================================================================
+# PARTE 444
+# CAMPOS XML
+# =============================================================================
+
+                xml.write(
+
+                    f"        <data>{registro[1]}</data>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <posto>{registro[2]}</posto>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <cidade>{registro[3]}</cidade>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <odometro>{registro[4]}</odometro>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <volume>{registro[5]}</volume>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <preco>{registro[6]}</preco>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <valor>{registro[7]}</valor>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <pressao>{registro[8]}</pressao>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <temperatura>{registro[9]}</temperatura>\n"
+
+                )
+
+                xml.write(
+
+                    f"        <altitude>{registro[10]}</altitude>\n"
+
+                )
+
+
+# =============================================================================
+# PARTE 445
+# FECHAR REGISTRO XML
+# =============================================================================
+
+                xml.write(
+
+                    "    </abastecimento>\n"
+
+                )
+
+            xml.write(
+
+                "</abastecimentos>\n"
+
+            )
+
 		
 
 # =============================================================================
