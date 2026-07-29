@@ -40,6 +40,7 @@ import math
 import csv
 import os
 import sqlite3
+import json
 import tkinter as tk
 import pandas as pd
 from tkinter import ttk
@@ -9911,6 +9912,123 @@ class InterfaceGNV:
 # =============================================================================
 
         return
+
+# =============================================================================
+# PARTE 471
+# CARREGAR CONFIGURAÇÕES
+# =============================================================================
+
+    def carregar_configuracoes(self):
+
+        self.configuracoes = {}
+
+        if os.path.exists(
+
+            "configuracoes.json"
+
+        ):
+
+            with open(
+
+                "configuracoes.json",
+
+                "r",
+
+                encoding="utf-8"
+
+            ) as arquivo:
+
+                self.configuracoes = json.load(
+
+                    arquivo
+
+                )
+
+
+# =============================================================================
+# PARTE 472
+# SALVAR CONFIGURAÇÕES
+# =============================================================================
+
+    def salvar_configuracoes(self):
+
+        with open(
+
+            "configuracoes.json",
+
+            "w",
+
+            encoding="utf-8"
+
+        ) as arquivo:
+
+            json.dump(
+
+                self.configuracoes,
+
+                arquivo,
+
+                indent=4,
+
+                ensure_ascii=False
+
+            )
+
+
+# =============================================================================
+# PARTE 473
+# DEFINIR CONFIGURAÇÃO
+# =============================================================================
+
+    def definir_configuracao(
+
+        self,
+
+        chave,
+
+        valor
+
+    ):
+
+        self.configuracoes[
+
+            chave
+
+        ] = valor
+
+
+# =============================================================================
+# PARTE 474
+# GRAVAR CONFIGURAÇÃO
+# =============================================================================
+
+        self.salvar_configuracoes()
+
+
+
+# =============================================================================
+# PARTE 475
+# LER CONFIGURAÇÃO
+# =============================================================================
+
+    def ler_configuracao(
+
+        self,
+
+        chave,
+
+        padrao=None
+
+    ):
+
+        return self.configuracoes.get(
+
+            chave,
+
+            padrao
+
+        )
+
 
 
 		
