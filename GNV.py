@@ -10029,6 +10029,243 @@ class InterfaceGNV:
 
         )
 
+# =============================================================================
+# PARTE 477
+# INICIALIZAR CONFIGURAÇÕES
+# =============================================================================
+
+    def inicializar_configuracoes(self):
+
+        self.carregar_configuracoes()
+
+
+# =============================================================================
+# PARTE 478
+# VERIFICAR TEMA
+# =============================================================================
+
+        tema = self.ler_configuracao(
+
+            "tema",
+
+            "claro"
+
+        )
+
+
+# =============================================================================
+# PARTE 479
+# APLICAR TEMA
+# =============================================================================
+
+        self.tema_atual = tema
+
+
+# =============================================================================
+# PARTE 480
+# STATUS
+# =============================================================================
+
+        self.status.set(
+
+            "Configurações carregadas."
+
+        )
+
+
+# =============================================================================
+# PARTE 481
+# CONFIGURAÇÃO PADRÃO
+# =============================================================================
+
+    def criar_configuracao_padrao(self):
+
+        self.configuracoes = {
+
+            "tema": "claro",
+
+            "backup_automatico": True,
+
+            "idioma": "pt-BR"
+
+        }
+
+
+# =============================================================================
+# PARTE 482
+# SALVAR PADRÃO
+# =============================================================================
+
+        self.salvar_configuracoes()
+
+
+# =============================================================================
+# PARTE 483
+# REINICIAR CONFIGURAÇÕES
+# =============================================================================
+
+    def reiniciar_configuracoes(self):
+
+        self.criar_configuracao_padrao()
+
+
+
+# =============================================================================
+# PARTE 484
+# ATUALIZAR STATUS
+# =============================================================================
+
+        self.status.set(
+
+            "Configurações restauradas."
+
+        )
+
+
+# =============================================================================
+# PARTE 485
+# MENSAGEM
+# =============================================================================
+
+        messagebox.showinfo(
+
+            "Configurações",
+
+            "Configurações restauradas com sucesso."
+
+        )
+
+
+# =============================================================================
+# PARTE 486
+# EXPORTAR CONFIGURAÇÕES
+# =============================================================================
+
+    def exportar_configuracoes(self):
+
+        arquivo = filedialog.asksaveasfilename(
+
+            defaultextension=".json",
+
+            filetypes=[
+
+                (
+
+                    "Arquivo JSON",
+
+                    "*.json"
+
+                )
+
+            ],
+
+            initialfile="Configuracoes_GNV.json"
+
+        )
+
+        if not arquivo:
+
+            return
+
+
+# =============================================================================
+# PARTE 487
+# GRAVAR CONFIGURAÇÕES
+# =============================================================================
+
+        with open(
+
+            arquivo,
+
+            "w",
+
+            encoding="utf-8"
+
+        ) as arq:
+
+            json.dump(
+
+                self.configuracoes,
+
+                arq,
+
+                indent=4,
+
+                ensure_ascii=False
+
+            )
+
+
+# =============================================================================
+# PARTE 488
+# IMPORTAR CONFIGURAÇÕES
+# =============================================================================
+
+    def importar_configuracoes(self):
+
+        arquivo = filedialog.askopenfilename(
+
+            filetypes=[
+
+                (
+
+                    "Arquivo JSON",
+
+                    "*.json"
+
+                )
+
+            ]
+
+        )
+
+        if not arquivo:
+
+            return
+
+# =============================================================================
+# PARTE 489
+# LER CONFIGURAÇÕES
+# =============================================================================
+
+        with open(
+
+            arquivo,
+
+            "r",
+
+            encoding="utf-8"
+
+        ) as arq:
+
+            self.configuracoes = json.load(
+
+                arq
+
+            )
+
+        self.salvar_configuracoes()
+
+
+# =============================================================================
+# PARTE 490
+# CONFIGURAÇÕES IMPORTADAS
+# =============================================================================
+
+        self.status.set(
+
+            "Configurações importadas."
+
+        )
+
+        messagebox.showinfo(
+
+            "Configurações",
+
+            "Configurações importadas com sucesso."
+
+        )
+
 
 
 		
