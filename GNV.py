@@ -4375,9 +4375,17 @@ class InterfaceGNV:
 
             )
 
+            valor_maior_posto = total_por_posto[
+
+                posto_maior_gasto
+
+            ]
+
         else:
 
             posto_maior_gasto = "-"
+
+            valor_maior_posto = 0
 
 
 
@@ -5659,7 +5667,7 @@ class InterfaceGNV:
 
             soma_pressao += float(
 
-                registro[8]
+                registro[9]
 
             )
 
@@ -5715,7 +5723,7 @@ class InterfaceGNV:
 
             soma_temperatura += float(
 
-                registro[9]
+                registro[8]
 
             )
 
@@ -5764,7 +5772,7 @@ class InterfaceGNV:
 
             pressao = float(
 
-                registro[8]
+                registro[9]
 
             )
 
@@ -5782,7 +5790,7 @@ class InterfaceGNV:
 
             menor_pressao = float(
 
-                registros[0][8]
+                registros[0][9]
 
             )
 
@@ -5790,7 +5798,7 @@ class InterfaceGNV:
 
                 pressao = float(
 
-                    registro[8]
+                    registro[9]
 
                 )
 
@@ -5839,7 +5847,7 @@ class InterfaceGNV:
 
             (
 
-                float(r[9])
+                float(r[8])
 
                 for r in registros
 
@@ -5860,7 +5868,7 @@ class InterfaceGNV:
 
             (
 
-                float(r[9])
+                float(r[8])
 
                 for r in registros
 
