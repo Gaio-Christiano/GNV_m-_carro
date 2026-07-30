@@ -8949,7 +8949,7 @@ class InterfaceGNV:
 
         )
 
-
+"""
 # =============================================================================
 # PARTE 172
 # SALVAR ABASTECIMENTO
@@ -8991,7 +8991,85 @@ class InterfaceGNV:
 
             )
 
+            return """
+# =============================================================================
+# PARTE 172
+# SALVAR ABASTECIMENTO
+# =============================================================================
+
+    def salvar_abastecimento(self):
+
+        try:
+
+            observacoes = self.texto_observacoes.get(
+                "1.0",
+                tk.END
+            ).strip()
+
+            if not self.entry_data.get().strip():
+
+                messagebox.showwarning(
+                    "Atenção",
+                    "Informe a data do abastecimento."
+                )
+                self.entry_data.focus()
+                return
+
+            if not self.entry_posto.get().strip():
+
+                messagebox.showwarning(
+                    "Atenção",
+                    "Informe o posto."
+                )
+                self.entry_posto.focus()
+                return
+
+            if not self.entry_odometro.get().strip():
+
+                messagebox.showwarning(
+                    "Atenção",
+                    "Informe o odômetro."
+                )
+                self.entry_odometro.focus()
+                return
+
+            abastecimento = Abastecimento(
+
+                data=self.entry_data.get(),
+
+                posto=self.entry_posto.get(),
+
+                cidade=self.entry_cidade.get(),
+
+                odometro=float(self.entry_odometro.get()),
+
+                volume_m3=float(self.entry_volume_abastecido.get()),
+
+                preco_m3=float(self.entry_preco_m3.get()),
+
+                temperatura=float(self.entry_temp_abastecimento.get()),
+
+                pressao=float(self.entry_pressao_abastecimento.get()),
+
+                altitude=float(self.entry_altitude_abastecimento.get()),
+
+                observacoes=observacoes
+
+            )
+
+        except ValueError:
+
+            messagebox.showerror(
+
+                "Erro",
+
+                "Existem campos numéricos inválidos."
+
+            )
+
             return
+
+
 
 # =============================================================================
 # PARTE 173
