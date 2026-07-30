@@ -2240,7 +2240,9 @@ class Abastecimento:
 
         pressao,
 
-        altitude
+        altitude,
+
+		observacoes=""
 
     ):
 
@@ -2261,6 +2263,8 @@ class Abastecimento:
         self.pressao = pressao
 
         self.altitude = altitude
+		
+		self.oservacoes = observacoes
 
         self.valor_total = (
 
@@ -2308,6 +2312,8 @@ class Abastecimento:
 
         print(f"Altitude...........: {self.altitude:.1f} m")
 
+		print(f"Observações........: {self.observacoes}")
+
         print()
 
         print("=" * 75)
@@ -2342,7 +2348,9 @@ class Abastecimento:
 
             "pressao": self.pressao,
 
-            "altitude": self.altitude
+            "altitude": self.altitude,
+
+			"observacoes": self.observacoes
 
         }
 
