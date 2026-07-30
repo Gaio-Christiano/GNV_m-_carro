@@ -3901,6 +3901,42 @@ class InterfaceGNV:
 
         for registro in registros:
 
+            volume = float(registro[5])
+
+            preco = float(registro[6])
+
+            valor = float(registro[7])
+
+            total_gasto += valor
+
+            total_volume += volume
+
+            total_preco += preco
+
+            postos.add(
+
+                registro[2]
+
+            )
+
+            cidades.add(
+
+                registro[3]
+
+            )
+
+            if volume > maior_volume:
+
+                maior_volume = volume
+
+            if menor_volume is None:
+
+                menor_volume = volume
+
+            elif volume < menor_volume:
+
+                menor_volume = volume
+
 
 # =============================================================================
 # PARTE 276
