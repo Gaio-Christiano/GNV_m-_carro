@@ -2930,7 +2930,9 @@ class BancoGNV:
 
             pressao REAL,
 
-            altitude REAL
+            altitude REAL,
+
+	        observacoes TEXT
 
         )
 
@@ -2974,13 +2976,15 @@ class BancoGNV:
 
                 pressao,
 
-                altitude
+                altitude,
+
+				observacoes
 
             )
 
             VALUES(
 
-                ?,?,?,?,?,?,?,?,?,?
+                ?,?,?,?,?,?,?,?,?,?,?
 
             )
 
@@ -3006,7 +3010,9 @@ class BancoGNV:
 
                 abastecimento.pressao,
 
-                abastecimento.altitude
+                abastecimento.altitude,
+
+				abastecimento.observacoes
 
             )
 
@@ -3142,7 +3148,9 @@ class BancoGNV:
 
                 pressao = ?,
 
-                altitude = ?
+                altitude = ?,
+
+				observacoes = ?
 
             WHERE id = ?
 
@@ -3169,6 +3177,8 @@ class BancoGNV:
                 abastecimento.pressao,
 
                 abastecimento.altitude,
+
+				abastecimento.observacoes,
 
                 id_abastecimento
 
