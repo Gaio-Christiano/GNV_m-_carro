@@ -2384,9 +2384,35 @@ class HistoricoAbastecimentos:
 
     ):
 
+        if not isinstance(
+
+            abastecimento,
+
+            Abastecimento
+
+        ):
+
+            raise TypeError(
+
+                "Objeto inválido."
+
+            )
+
         self.abastecimentos.append(
 
             abastecimento
+
+        )
+
+        self.abastecimentos.sort(
+
+            key=lambda x: (
+
+                x.data,
+
+                x.odometro
+
+            )
 
         )
 
@@ -2440,7 +2466,9 @@ class HistoricoAbastecimentos:
 
                 f"{abastecimento.posto} - "
 
-                f"{abastecimento.volume_m3:.3f} m³"
+                f"{abastecimento.volume_m3:.3f} m³ - "
+
+				f"R$ {abastecimento.valor_total:.2f}"
 
             )
 
