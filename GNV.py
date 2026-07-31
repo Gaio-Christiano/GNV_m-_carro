@@ -13325,6 +13325,7 @@ energia = calcular_energia_volume(
 )
 
 
+"""
 # ==============================================================
 # ENERGIA EM kWh
 # ==============================================================
@@ -13470,6 +13471,87 @@ tabela.append(
     linha
 
 )
+
+"""
+
+# ==============================================================
+# ENERGIA EM kWh
+# ==============================================================
+energia_kwh = (
+    energia
+    /
+    3.6
+)
+
+# ==============================================================
+# DENSIDADE APARENTE
+# ==============================================================
+if volume_cntp > 0:
+
+    densidade_aparente = massa / volume_cntp
+
+else:
+
+    densidade_aparente = 0.0
+
+# ==============================================================
+# DENSIDADE
+# ==============================================================
+densidade = calcular_massa_especifica(
+    massa,
+    volume_cntp
+)
+
+# ==============================================================
+# CONSTANTE ESPECÍFICA
+# ==============================================================
+R_especifico = calcular_R_especifico(
+    calcular_massa_molar_mistura()
+)
+
+# ==============================================================
+# LINHA DA TABELA
+# ==============================================================
+linha = {
+
+    "Temperatura_C": temperatura,
+
+    "Temperatura_K": temperatura_kelvin,
+
+    "Pressao_bar": pressao,
+
+    "Pressao_Absoluta": pressao_absoluta,
+
+    "Altitude": self.altitude,
+
+    "Pressao_Atmosferica": pressao_atm,
+
+    "Pr": resultado_z["Pr"],
+
+    "Tr": resultado_z["Tr"],
+
+    "Fator_Z": resultado_z["Z"],
+
+    "Volume_CNTP": volume_cntp,
+
+    "Massa": massa,
+
+    "Energia_MJ": energia,
+
+    "Energia_kWh": energia_kwh,
+
+    "Densidade": densidade,
+
+    "Densidade_Aparente": densidade_aparente,
+
+    "R_especifico": R_especifico
+
+}
+
+tabela.append(
+    linha
+)
+
 
                 pressao += passo_pressao
 
