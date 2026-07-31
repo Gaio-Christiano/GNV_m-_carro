@@ -9871,7 +9871,7 @@ class InterfaceGNV:
 
                 "Pressão",
 
-                f"{registro[8]} bar"
+                f"{registro[9]} bar"
 
             )
 # =============================================================================
@@ -9883,7 +9883,7 @@ class InterfaceGNV:
 
                 "Temperatura",
 
-                f"{registro[9]} °C"
+                f"{registro[8]} °C"
 
             )
 
