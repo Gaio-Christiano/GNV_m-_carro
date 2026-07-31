@@ -4782,7 +4782,7 @@ class InterfaceGNV:
 # REFRESH
 # =============================================================================
 
-        self.root.update_idletasks()
+        self.janela.update_idletasks()
 
 
 
