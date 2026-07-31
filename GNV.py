@@ -10403,13 +10403,13 @@ class InterfaceGNV:
 
                 txt.write(
 
-                    f"Pressão..........: {registro[8]} bar\n"
+                    f"Pressão..........: {registro[9]} bar\n"
 
                 )
 
                 txt.write(
 
-                    f"Temperatura......: {registro[9]} °C\n"
+                    f"Temperatura......: {registro[8]} °C\n"
 
                 )
 
