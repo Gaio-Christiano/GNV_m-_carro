@@ -11528,48 +11528,70 @@ class InterfaceGNV:
 
         )
 
-
+"""
 # =============================================================================
 # PARTE 205
 # MENU CONTEXTO
 # =============================================================================
 
-    def menu_contexto(
+def menu_contexto(
+    self,
+    event
+):
 
-        self,
-
-        event
-
-    ):
-
-        self.menu_tree.post(
-
-            event.x_root,
-
-            event.y_root
-
-        )
-
+    self.menu_tree.post(
+        event.x_root,
+        event.y_root
+    )
 
 # =============================================================================
 # PARTE 206
 # SELECIONAR ITEM
 # =============================================================================
 
-        item = self.tree.identify_row(
+    item = self.tree.identify_row(
+        event.y
+    )
 
-            event.y
+    if item:
 
+        self.tree.selection_set(
+            item
+        )
+"""
+
+
+
+# =============================================================================
+# PARTE 205
+# MENU CONTEXTO
+# =============================================================================
+
+def menu_contexto(
+    self,
+    event
+):
+
+    item = self.tree.identify_row(
+        event.y
+    )
+
+    if item:
+
+        self.tree.selection_set(
+            item
         )
 
-        if item:
+        self.tree.focus(
+            item
+        )
 
-            self.tree.selection_set(
+        self.menu_tree.post(
+            event.x_root,
+            event.y_root
+        )
 
-                item
-
-            )
-
+"""	
 # =============================================================================
 # PARTE 217
 # EXCLUSÃO COMPLETA
@@ -11645,7 +11667,7 @@ class InterfaceGNV:
         print()
 
         self.atualizar_historico()
-
+"""
 
 
 
@@ -11662,7 +11684,7 @@ class InterfaceGNV:
 
         ) """
 
-
+"""
 # =============================================================================
 # PARTE 208
 # EXCLUIR REGISTRO
@@ -11764,7 +11786,7 @@ class InterfaceGNV:
         self.atualizar_historico()
 
 
-
+"""
 
 # =============================================================================
 # PARTE 211
@@ -11908,7 +11930,7 @@ class InterfaceGNV:
 
 
 
-
+"""
 # =============================================================================
 # PARTE 145
 # EXECUTAR CÁLCULO
@@ -12077,6 +12099,126 @@ class InterfaceGNV:
 
             else:
 
+                texto = str(valor)
+
+            self.texto_resultados.insert(
+                tk.END,
+                f"{chave:<30} {texto}\n"
+            )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "\n" + "=" * 70 + "\n"
+        )
+"""
+
+# =============================================================================
+# PARTE 145
+# EXECUTAR CÁLCULO
+# =============================================================================
+
+    def executar_calculo(self):
+
+        try:
+
+            volume = float(self.entry_volume.get())
+            quantidade = int(self.entry_quantidade.get())
+            pressao = float(self.entry_pressao.get())
+            temperatura = float(self.entry_temperatura.get())
+            altitude = float(self.entry_altitude.get())
+            fator_z = float(self.entry_fator_z.get())
+            massa_molar = float(self.entry_massa_molar.get())
+
+        except ValueError:
+
+            self.texto_resultados.delete(
+                "1.0",
+                tk.END
+            )
+
+            self.texto_resultados.insert(
+                tk.END,
+                "Erro: verifique os valores informados."
+            )
+
+            return
+
+        volume_total = volume * quantidade
+
+        resultado = calcular_quantidade_gnv(
+            volume_total,
+            pressao,
+            temperatura,
+            altitude,
+            fator_z,
+            massa_molar
+        )
+
+        self.texto_resultados.delete(
+            "1.0",
+            tk.END
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "=" * 70 + "\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "RELATÓRIO DOS CÁLCULOS DE GNV\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "=" * 70 + "\n\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Volume Total..............: {volume_total:.2f} L\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Quantidade de Cilindros...: {quantidade}\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Pressão...................: {pressao:.2f} bar\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Temperatura...............: {temperatura:.2f} °C\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Altitude..................: {altitude:.2f} m\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Fator Z...................: {fator_z:.4f}\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Massa Molar...............: {massa_molar:.5f} kg/mol\n\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "-" * 70 + "\n"
+        )
+
+        for chave, valor in resultado.items():
+
+            if isinstance(valor, float):
+                texto = f"{valor:.6f}"
+            else:
                 texto = str(valor)
 
             self.texto_resultados.insert(
