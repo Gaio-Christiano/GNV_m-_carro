@@ -12112,6 +12112,7 @@ def menu_contexto(
         )
 """
 
+"""
 # =============================================================================
 # PARTE 145
 # EXECUTAR CÁLCULO
@@ -12230,6 +12231,133 @@ def menu_contexto(
             tk.END,
             "\n" + "=" * 70 + "\n"
         )
+
+"""
+# =============================================================================
+# PARTE 145
+# EXECUTAR CÁLCULO
+# =============================================================================
+
+    def executar_calculo(self):
+
+        try:
+
+            volume = float(self.entry_volume.get())
+            quantidade = int(self.entry_quantidade.get())
+            pressao = float(self.entry_pressao.get())
+            temperatura = float(self.entry_temperatura.get())
+            altitude = float(self.entry_altitude.get())
+            fator_z = float(self.entry_fator_z.get())
+            massa_molar = float(self.entry_massa_molar.get())
+
+        except ValueError:
+
+            self.texto_resultados.delete(
+                "1.0",
+                tk.END
+            )
+
+            self.texto_resultados.insert(
+                tk.END,
+                "Erro: verifique os valores informados."
+            )
+
+            return
+
+        volume_total = volume * quantidade
+
+        resultado = calcular_quantidade_gnv(
+            volume_total,
+            pressao,
+            temperatura,
+            altitude,
+            fator_z,
+            massa_molar
+        )
+
+        self.texto_resultados.delete(
+            "1.0",
+            tk.END
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "=" * 70 + "\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "RELATÓRIO DOS CÁLCULOS DE GNV\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "=" * 70 + "\n\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Volume Total..............: {volume_total:.2f} L\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Quantidade de Cilindros...: {quantidade}\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Pressão...................: {pressao:.2f} bar\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Temperatura...............: {temperatura:.2f} °C\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Altitude..................: {altitude:.2f} m\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Fator Z...................: {fator_z:.4f}\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Massa Molar...............: {massa_molar:.5f} kg/mol\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "-" * 70 + "\n"
+        )
+
+        for chave, valor in resultado.items():
+
+            if isinstance(valor, float):
+                texto = f"{valor:.6f}"
+            else:
+                texto = str(valor)
+
+            self.texto_resultados.insert(
+                tk.END,
+                f"{chave:<30} {texto}\n"
+            )
+
+        self.texto_resultados.insert(
+            tk.END,
+            "\n" + "=" * 70 + "\n"
+        )
+
+		
 
 # =============================================================================
 # PARTE 156
