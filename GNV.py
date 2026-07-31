@@ -6628,15 +6628,32 @@ class InterfaceGNV:
 # ATUALIZAR SQLITE
 # =============================================================================
 
-        self.atualizar_sqlite()
+        if hasattr(
+
+            self,
+
+            "tree_sqlite"
+
+        ):
+
+            self.atualizar_sqlite()
+
 
 # =============================================================================
 # PARTE 509
 # ATUALIZAR EXCEL
 # =============================================================================
 
-        self.atualizar_excel()
+        if hasattr(
 
+            self,
+
+            "arquivo_excel"
+
+        ):
+
+            self.atualizar_excel()
+			
 
 # =============================================================================
 # PARTE 510
