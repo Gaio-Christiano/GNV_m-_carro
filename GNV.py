@@ -6879,7 +6879,7 @@ class InterfaceGNV:
 
             self,
 
-            "atualizar_sqlite"
+            "tree_sqlite"
 
         ):
 
@@ -6895,11 +6895,13 @@ class InterfaceGNV:
 
             self,
 
-            "atualizar_excel"
+            "arquivo_excel"
 
         ):
 
             self.atualizar_excel()
+
+
 
 
 # =============================================================================
