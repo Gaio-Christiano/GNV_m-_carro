@@ -4934,11 +4934,8 @@ class InterfaceGNV:
         )
 
         self.janela.minsize(
-
-            1200,
-
-            700
-
+            900,
+            600
         )
 
 
@@ -5726,7 +5723,7 @@ class InterfaceGNV:
             ("Capacidade do cilindro (L)", "entry_capacidade_cilindro", 5),
             ("Volume marcado pela bomba (m³)", "entry_volume_abastecido", 6),
             ("Preço por m³ (R$)", "entry_preco_m3", 7),
-            ("Temperatura do gás (°C)", "entry_temp_abastecimento", 8),
+            ("Temperatura ambiente no abastecimento (°C)", "entry_temp_abastecimento", 8),
             ("Pressão inicial (bar)", "entry_pressao_inicial", 9),
             ("Pressão final (bar)", "entry_pressao_final", 10),
             ("Altitude (m)", "entry_altitude_abastecimento", 11),
@@ -5935,9 +5932,12 @@ class InterfaceGNV:
             command=self.atualizar_sqlite
         ).pack(anchor="w", padx=5, pady=5)
         colunas_sqlite = (
-            "ID", "Data", "Posto", "Cidade", "Odometro",
-            "Volume", "Preco", "Valor", "Temperatura",
-            "Pressao", "Altitude"
+            "ID", "Data", "Posto", "Cidade", "Odômetro",
+            "Volume bomba (m³)", "Preço/m³", "Valor total",
+            "Temp. ambiente (°C)", "Pressão registrada (bar)",
+            "Altitude (m)", "Capacidade cilindro (L)",
+            "Pressão inicial (bar)", "Pressão final (bar)",
+            "Massa específica (kg/m³)", "Metragem teórica (m³)"
         )
         self.tree_sqlite = ttk.Treeview(
             self.frame_sqlite,
@@ -6712,22 +6712,42 @@ class InterfaceGNV:
 # TEXTO ESTATÍSTICAS
 # =============================================================================
 
+        self.frame_texto_estatisticas = ttk.Frame(
+            self.frame_estatisticas
+        )
+        self.frame_texto_estatisticas.pack(
+            fill="both",
+            expand=True,
+            padx=5,
+            pady=5
+        )
+
         self.texto_estatisticas = tk.Text(
-
-            self.frame_estatisticas,
-
+            self.frame_texto_estatisticas,
             width=90,
+            height=10,
+            wrap="none"
+        )
 
-            height=25
+        self.scroll_estatisticas = ttk.Scrollbar(
+            self.frame_texto_estatisticas,
+            orient="vertical",
+            command=self.texto_estatisticas.yview
+        )
 
+        self.texto_estatisticas.configure(
+            yscrollcommand=self.scroll_estatisticas.set
         )
 
         self.texto_estatisticas.pack(
-
+            side="left",
             fill="both",
-
             expand=True
+        )
 
+        self.scroll_estatisticas.pack(
+            side="right",
+            fill="y"
         )
 
 
@@ -6759,19 +6779,11 @@ class InterfaceGNV:
 # SEPARADOR
 # =============================================================================
 
-        ttk.Separator(
-
+        self.separador_estatisticas = ttk.Separator(
             self.frame_estatisticas,
-
             orient="horizontal"
-
-        ).pack(
-
-            fill="x",
-
-            pady=10
-
         )
+        self.separador_estatisticas.pack_forget()
 
 
 # =============================================================================
@@ -6797,13 +6809,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_total_gasto.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_total_gasto.pack_forget()
 
 
 # =============================================================================
@@ -6819,13 +6825,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_total_m3.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_total_m3.pack_forget()
 
 
 # =============================================================================
@@ -6841,13 +6841,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_media_preco.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_media_preco.pack_forget()
 
 
 # =============================================================================
@@ -6863,13 +6857,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_media_volume.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_media_volume.pack_forget()
 
 
 # =============================================================================
@@ -6885,13 +6873,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_melhor.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_melhor.pack_forget()
 
 
 # =============================================================================
@@ -6907,13 +6889,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_pior.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_pior.pack_forget()
 
 
 
@@ -6952,13 +6928,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_menor.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_menor.pack_forget()
 
 
 # =============================================================================
@@ -6974,13 +6944,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_postos.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_postos.pack_forget()
 
 
 # =============================================================================
@@ -6996,13 +6960,7 @@ class InterfaceGNV:
 
         )
 
-        self.lbl_cidades.pack(
-
-            anchor="w",
-
-            padx=10
-
-        )
+        self.lbl_cidades.pack_forget()
 
 
 
@@ -7366,16 +7324,35 @@ class InterfaceGNV:
 # INSERIR REGISTROS
 # =============================================================================
 
+        fator_z = converter_numero(self.entry_fator_z.get()) if hasattr(self, "entry_fator_z") else 0.92
+        massa_molar = converter_numero(self.entry_massa_molar.get()) if hasattr(self, "entry_massa_molar") else 0.01604
+
         for registro in registros:
 
+            try:
+                metragem_teorica = calcular_comparacao_abastecimento(
+                    float(registro[12] or 0),
+                    float(registro[13] or 0),
+                    float(registro[14] or 0),
+                    float(registro[8] or 20),
+                    float(registro[10] or 0),
+                    fator_z,
+                    massa_molar
+                )["volume_teorico_m3"]
+            except (ValueError, TypeError, IndexError):
+                metragem_teorica = 0.0
+
+            valores_sqlite = (
+                registro[0], registro[1], registro[2], registro[3], registro[4],
+                registro[5], registro[6], registro[7], registro[8], registro[9],
+                registro[10], registro[12], registro[13], registro[14], registro[15],
+                metragem_teorica
+            )
+
             self.tree_sqlite.insert(
-
                 "",
-
                 tk.END,
-
-                values=registro
-
+                values=valores_sqlite
             )
 
 # =============================================================================
@@ -7823,12 +7800,14 @@ class InterfaceGNV:
 
         self.texto_resultados.insert(
             tk.END,
-            f"GNV equivalente (20 °C)...: {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
+            f"Volume de referência (20 °C): {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
         )
 
         self.texto_resultados.insert(
             tk.END,
-            f"GNV equivalente............: {formatar_numero_br(resultado['volume_equivalente_litros_20c'], 1)} L\n"
+            "Observação: o volume de referência não é o volume físico do cilindro.\n"
+            "É o volume que a mesma quantidade de matéria ocuparia a 20 °C e\n"
+            "1,01325 bar, usando Z de referência igual a 1.\n"
         )
 
         self.texto_resultados.insert(
@@ -7881,9 +7860,7 @@ class InterfaceGNV:
 
             ("Volume físico ocupado", resultado["volume_real"], "m³", 6),
 
-            ("GNV equivalente a 20 °C", resultado["volume_equivalente_m3_20c"], "m³", 3),
-
-            ("GNV equivalente a 20 °C", resultado["volume_equivalente_litros_20c"], "L", 1),
+            ("Volume de referência a 20 °C", resultado["volume_equivalente_m3_20c"], "m³", 3),
 
         ]
 
@@ -10636,6 +10613,9 @@ class InterfaceGNV:
 
         self.entry_altitude_abastecimento.delete(0, tk.END)
 
+        self.entry_densidade_informada_abastecimento.delete(0, tk.END)
+        self.entry_densidade_informada_abastecimento.insert(0, "0,76")
+
         self.texto_observacoes.delete(
 
             "1.0",
@@ -10738,7 +10718,8 @@ class InterfaceGNV:
             percentual = (diferenca / volume_teorico * 100.0) if volume_teorico > 0 else 0.0
             eficiencia = (volume_bomba / volume_teorico * 100.0) if volume_teorico > 0 else 0.0
 
-            self.texto_comparacao_abastecimento.delete("1.0", tk.END)
+            self.texto_comparacao_abastecimento.configure(state="normal")
+            self.texto_comparacao_abastecimento.delete("1.0", "end")
             self.texto_comparacao_abastecimento.insert(
                 tk.END,
                 "=" * 62 + "\n"
@@ -10747,15 +10728,17 @@ class InterfaceGNV:
                 f"Capacidade do cilindro : {formatar_numero_br(abastecimento.capacidade_cilindro_l, 2)} L\n"
                 f"Pressão inicial        : {formatar_numero_br(abastecimento.pressao_inicial, 2)} bar\n"
                 f"Pressão final          : {formatar_numero_br(abastecimento.pressao_final, 2)} bar\n"
+                f"Temperatura ambiente   : {formatar_numero_br(abastecimento.temperatura, 2)} °C\n"
                 f"Massa específica posto : {formatar_numero_br(abastecimento.densidade_informada_kg_m3, 3)} kg/m³\n"
                 f"Δ pressão              : {formatar_numero_br(comparacao['delta_pressao_bar'], 2)} bar\n\n"
                 f"Volume da bomba        : {formatar_numero_br(volume_bomba, 3)} m³\n"
-                f"Volume teórico         : {formatar_numero_br(volume_teorico, 3)} m³\n"
+                f"Metragem cúbica teórica : {formatar_numero_br(volume_teorico, 3)} m³\n"
                 f"Diferença bomba-teórico: {formatar_numero_br(diferenca, 3)} m³\n"
                 f"Diferença percentual   : {formatar_numero_br(percentual, 2)} %\n"
                 f"Relação bomba/teórico  : {formatar_numero_br(eficiencia, 2)} %\n\n"
                 "REFERÊNCIA DO CÁLCULO\n"
-                "20 °C / 1,01325 bar / Z referência = 1\n\n"
+                "20 °C / 1,01325 bar / Z referência = 1\n"
+                "Temperatura usada no modelo: temperatura ambiente informada.\n\n"
                 "ATENÇÃO: esta comparação é um modelo físico. Para uma\n"
                 "conclusão metrológica sobre fraude são necessários também\n"
                 "dados de temperatura real do gás, composição/Z validado,\n"
@@ -13057,17 +13040,9 @@ if __name__ == "__main__":
     janela.mainloop()
 
 
-# =============================================================================
-# COMMIT GIT (PORTUGUÊS)
-# =============================================================================
-# feat: reorganiza aba Cálculos e documenta fórmulas e fator Z
-#
-# - aceita números com ponto ou vírgula decimal
-# - remove o título duplicado "Resultados" da área de cálculo
-# - reposiciona os botões acima da área de resultados
-# - adiciona a aba "Fórmulas e Física"
-# - documenta o fator Z e as equações utilizadas
-# - adiciona massa específica informada pelo posto nos cálculos
-# - compara densidade informada e densidade calculada
-# - registra massa específica nos abastecimentos
-# - mantém unidades físicas nos resultados
+
+
+
+
+
+
