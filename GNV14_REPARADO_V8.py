@@ -1779,7 +1779,8 @@ def calcular_massa_gas_real(
     volume_m3,
     temperatura_kelvin,
     fator_z,
-    massa_molar
+    massa_molar,
+    densidade_informada_kg_m3=None
 ):
     """
     Calcula a massa do GNV utilizando
@@ -2004,7 +2005,8 @@ def calcular_quantidade_gnv(
     temperatura_c,
     altitude_m,
     fator_z,
-    massa_molar
+    massa_molar,
+    densidade_informada_kg_m3=None
 ):
     """
     Calcula automaticamente diversas propriedades
@@ -2112,6 +2114,30 @@ def calcular_quantidade_gnv(
             20.0,
             1.01325,
             1.0
+        ),
+
+        "densidade_informada_kg_m3": densidade_informada_kg_m3,
+
+        "massa_referencia_informada_kg": (
+            calcular_volume_referencia_m3(
+                mols,
+                20.0,
+                1.01325,
+                1.0
+            ) * densidade_informada_kg_m3
+            if densidade_informada_kg_m3 is not None else None
+        ),
+
+        "diferenca_massa_referencia_kg": (
+            (
+                calcular_volume_referencia_m3(
+                    mols,
+                    20.0,
+                    1.01325,
+                    1.0
+                ) * densidade_informada_kg_m3
+            ) - massa
+            if densidade_informada_kg_m3 is not None else None
         ),
 
         "volume_equivalente_litros_20c": (
@@ -3414,7 +3440,9 @@ class Abastecimento:
 
         pressao_inicial=0.0,
 
-        pressao_final=0.0
+        pressao_final=0.0,
+
+        densidade_informada_kg_m3=0.0
 
     ):
 
@@ -3443,6 +3471,8 @@ class Abastecimento:
         self.pressao_inicial = pressao_inicial
 
         self.pressao_final = pressao_final
+
+        self.densidade_informada_kg_m3 = densidade_informada_kg_m3
 
         self.valor_total = (
 
@@ -4121,7 +4151,9 @@ class BancoGNV:
 
             pressao_inicial REAL DEFAULT 0,
 
-            pressao_final REAL DEFAULT 0
+            pressao_final REAL DEFAULT 0,
+
+            densidade_informada_kg_m3 REAL DEFAULT 0
 
         )
 
@@ -4140,6 +4172,7 @@ class BancoGNV:
             "capacidade_cilindro_l": "REAL DEFAULT 0",
             "pressao_inicial": "REAL DEFAULT 0",
             "pressao_final": "REAL DEFAULT 0",
+            "densidade_informada_kg_m3": "REAL DEFAULT 0",
         }
 
         for nome, definicao in novas_colunas.items():
@@ -4194,13 +4227,15 @@ class BancoGNV:
 
                 pressao_inicial,
 
-                pressao_final
+                pressao_final,
+
+                densidade_informada_kg_m3
 
             )
 
             VALUES(
 
-                ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 
             )
 
@@ -4234,7 +4269,9 @@ class BancoGNV:
 
                 abastecimento.pressao_inicial,
 
-                abastecimento.pressao_final
+                abastecimento.pressao_final,
+
+                abastecimento.densidade_informada_kg_m3
 
             )
 
@@ -4378,7 +4415,9 @@ class BancoGNV:
 
                 pressao_inicial = ?,
 
-                pressao_final = ?
+                pressao_final = ?,
+
+                densidade_informada_kg_m3 = ?
 
             WHERE id = ?
 
@@ -4413,6 +4452,8 @@ class BancoGNV:
                 abastecimento.pressao_inicial,
 
                 abastecimento.pressao_final,
+
+                abastecimento.densidade_informada_kg_m3,
 
                 id_abastecimento
 
@@ -4970,6 +5011,12 @@ class InterfaceGNV:
 
         )
 
+        self.aba_formulas = ttk.Frame(
+
+            self.notebook
+
+        )
+
 # =============================================================================
 # PARTE 134
 # ADICIONAR ABAS
@@ -5028,6 +5075,14 @@ class InterfaceGNV:
             self.aba_configuracoes,
 
             text="Configurações"
+
+        )
+
+        self.notebook.add(
+
+            self.aba_formulas,
+
+            text="Fórmulas e Física"
 
         )
 
@@ -5463,229 +5518,162 @@ class InterfaceGNV:
 
         )
 
+# =============================================================================
+# DENSIDADE INFORMADA PELO POSTO
+# =============================================================================
 
+        ttk.Label(
+
+            self.frame_calculos,
+
+            text="Massa específica de referência (kg/m³):"
+
+        ).grid(
+
+            row=7,
+
+            column=0,
+
+            padx=5,
+
+            pady=5,
+
+            sticky="w"
+
+        )
+
+        self.entry_densidade_informada = ttk.Entry(
+
+            self.frame_calculos,
+
+            width=15
+
+        )
+
+        self.entry_densidade_informada.grid(
+
+            row=7,
+
+            column=1,
+
+            padx=5,
+
+            pady=5
+
+        )
+
+        self.entry_densidade_informada.insert(
+
+            0,
+
+            "0,76"
+
+        )
 
 # =============================================================================
 # PARTE 143
-# BOTÃO CALCULAR
+# PAINEL DE BOTÕES E ÁREA DE RESULTADOS
 # =============================================================================
+
+        self.frame_botoes_calculos = ttk.Frame(
+            self.frame_calculos
+        )
+        self.frame_botoes_calculos.grid(
+            row=8,
+            column=0,
+            columnspan=4,
+            padx=10,
+            pady=(8, 8),
+            sticky="ew"
+        )
+
+        for coluna in range(3):
+            self.frame_botoes_calculos.grid_columnconfigure(
+                coluna,
+                weight=1
+            )
 
         self.botao_calcular = ttk.Button(
-
-            self.frame_calculos,
-
-            text="Calcular"
-
-        )
-
-        self.botao_calcular.grid(
-
-            row=7,
-
-            column=0,
-
-            columnspan=2,
-
-            padx=10,
-
-            pady=15,
-
-            sticky="ew"
-
-        )
-
-
-# =============================================================================
-# PARTE 146
-# LIGAR BOTÃO AO MÉTODO
-# =============================================================================
-
-        self.botao_calcular.configure(
-
+            self.frame_botoes_calculos,
+            text="Calcular",
             command=self.executar_calculo
-
         )
-
-
-# =============================================================================
-# PARTE 150
-# BOTÃO LIMPAR
-# =============================================================================
+        self.botao_calcular.grid(
+            row=0,
+            column=0,
+            padx=5,
+            sticky="ew"
+        )
 
         self.botao_limpar = ttk.Button(
-
-            self.frame_calculos,
-
-            text="Limpar",
-
+            self.frame_botoes_calculos,
+            text="Limpar Resultados",
             command=self.limpar_resultados
-
         )
-
         self.botao_limpar.grid(
-
-            row=7,
-
-            column=2,
-
-            padx=10,
-
-            pady=15,
-
+            row=0,
+            column=1,
+            padx=5,
             sticky="ew"
-
         )
-
-
-
-# =============================================================================
-# PARTE 152
-# BOTÃO LIMPAR CAMPOS
-# =============================================================================
 
         self.botao_limpar_campos = ttk.Button(
-
-            self.frame_calculos,
-
+            self.frame_botoes_calculos,
             text="Limpar Campos",
-
             command=self.limpar_campos
-
         )
-
         self.botao_limpar_campos.grid(
-
-            row=7,
-
-            column=3,
-
-            padx=10,
-
-            pady=15,
-
+            row=0,
+            column=2,
+            padx=5,
             sticky="ew"
-
         )
-
-
-# =============================================================================
-# PARTE 148
-# ÁREA DE RESULTADOS COM SCROLLBAR
-# =============================================================================
 
         self.frame_resultados = ttk.Frame(
-
             self.frame_calculos
-
         )
-
         self.frame_resultados.grid(
-
-            row=8,
-
+            row=9,
             column=0,
-
-            columnspan=2,
-
+            columnspan=4,
             padx=10,
-
-            pady=10,
-
+            pady=(0, 10),
             sticky="nsew"
-
         )
 
         self.scroll_resultados = ttk.Scrollbar(
-
             self.frame_resultados,
-
             orient="vertical"
-
         )
-
         self.scroll_resultados.pack(
-
             side="right",
-
             fill="y"
-
         )
 
         self.texto_resultados = tk.Text(
-
             self.frame_resultados,
-
-            width=90,
-
-            height=25,
-
             font=("Consolas", 10),
-
+            wrap="none",
             yscrollcommand=self.scroll_resultados.set
-
         )
-
         self.texto_resultados.pack(
-
             side="left",
-
             fill="both",
-
             expand=True
-
         )
-
         self.scroll_resultados.config(
-
             command=self.texto_resultados.yview
-
         )
 
         self.frame_calculos.grid_rowconfigure(
-
-            8,
-
+            9,
             weight=1
-
         )
-
-        self.frame_calculos.grid_columnconfigure(
-
-            1,
-
-            weight=1
-
-        )
-
-
-# =============================================================================
-# PARTE 154
-# TÍTULO DOS RESULTADOS
-# =============================================================================
-
-        self.label_resultados = ttk.Label(
-
-            self.frame_calculos,
-
-            text="Resultados",
-
-            font=("Arial",12,"bold")
-
-        )
-
-        self.label_resultados.grid(
-
-            row=8,
-
-            column=0,
-
-            sticky="w",
-
-            padx=10,
-
-            pady=(10,0)
-
-        )
+        for coluna in range(4):
+            self.frame_calculos.grid_columnconfigure(
+                coluna,
+                weight=1
+            )
 
 
 # =============================================================================
@@ -5742,6 +5730,7 @@ class InterfaceGNV:
             ("Pressão inicial (bar)", "entry_pressao_inicial", 9),
             ("Pressão final (bar)", "entry_pressao_final", 10),
             ("Altitude (m)", "entry_altitude_abastecimento", 11),
+            ("Massa específica do GNV (kg/m³)", "entry_densidade_informada_abastecimento", 12),
 
         ]
 
@@ -5790,6 +5779,7 @@ class InterfaceGNV:
             setattr(self, atributo, entrada)
 
         self.entry_pressao_abastecimento = self.entry_pressao_final
+        self.entry_densidade_informada_abastecimento.insert(0, "0,76")
 
         ttk.Label(
 
@@ -5899,7 +5889,7 @@ class InterfaceGNV:
 
             column=2,
 
-            rowspan=13,
+            rowspan=14,
 
             padx=15,
 
@@ -5922,7 +5912,7 @@ class InterfaceGNV:
         )
 
         self.frame_abastecimentos.grid_columnconfigure(2, weight=1)
-        self.frame_abastecimentos.grid_rowconfigure(13, weight=1)
+        self.frame_abastecimentos.grid_rowconfigure(14, weight=1)
 
 
 # =============================================================================
@@ -6079,6 +6069,61 @@ class InterfaceGNV:
             frame_config_botoes, text="Importar JSON",
             command=self.importar_configuracoes
         ).pack(side="left", padx=5)
+
+# =============================================================================
+# ABA FÓRMULAS E FÍSICA
+# =============================================================================
+
+        self.frame_formulas = ttk.Frame(
+            self.aba_formulas,
+            padding=12
+        )
+        self.frame_formulas.pack(
+            fill="both",
+            expand=True
+        )
+
+        ttk.Label(
+            self.frame_formulas,
+            text="Fórmulas, variáveis e fundamentos físicos",
+            font=("Arial", 15, "bold")
+        ).pack(
+            anchor="w",
+            pady=(0, 8)
+        )
+
+        self.scroll_formulas = ttk.Scrollbar(
+            self.frame_formulas,
+            orient="vertical"
+        )
+        self.scroll_formulas.pack(
+            side="right",
+            fill="y"
+        )
+
+        self.texto_formulas = tk.Text(
+            self.frame_formulas,
+            wrap="word",
+            font=("Segoe UI", 10),
+            yscrollcommand=self.scroll_formulas.set
+        )
+        self.texto_formulas.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+        self.scroll_formulas.config(
+            command=self.texto_formulas.yview
+        )
+
+        texto_formulas = 'FÓRMULAS E FUNDAMENTOS DO CÁLCULO DE GNV\n========================================\n\nEsta aba explica as principais grandezas utilizadas pelo programa.\nOs valores calculados dependem dos dados informados pelo usuário.\n\n1. VOLUME\n---------\nV(m³) = V(L) / 1000\n\nExemplo: 26 L = 0,026 m³.\n\nO volume físico do cilindro NÃO é o mesmo que o volume equivalente de GNV indicado pela bomba em m³.\n\n2. TEMPERATURA ABSOLUTA\n-----------------------\nT(K) = T(°C) + 273,15\n\nA temperatura em Kelvin é utilizada nas equações dos gases.\n\n3. PRESSÃO ABSOLUTA\n-------------------\nP_abs = P_manométrica + P_atmosférica\n\nO programa usa pressão absoluta na equação dos gases.\n\n4. LEI DOS GASES REAIS\n----------------------\nP V = Z n R T\n\nIsolando a quantidade de matéria:\n\nn = P V / (Z R T)\n\nP = pressão absoluta em Pa\nV = volume em m³\nZ = fator de compressibilidade\nn = quantidade de matéria em mol\nR = 8,314462618 J/(mol·K)\nT = temperatura absoluta em K\n\n5. FATOR Z - COMPRESSIBILIDADE\n------------------------------\nZ representa o afastamento do comportamento do gás real em relação ao gás ideal.\n\nPara um gás ideal:\n\nZ = 1\n\nNa aba Cálculos, o Z usado no cálculo é o valor informado pelo usuário.\n\nO código também possui uma estimativa aproximada baseada em propriedades reduzidas:\n\nPr = P_abs / P_crítica\nTr = T / T_crítica\n\nZ_aprox ≈ 1 + 0,08 · Pr / Tr\n\nATENÇÃO: essa expressão é uma aproximação didática existente no programa. Ela NÃO é AGA8, GERG-2008, Peng-Robinson ou outro modelo de alta precisão. Para análise metrológica rigorosa será necessário um modelo adequado e dados sobre a composição real do gás.\n\n6. MASSA DO GNV\n----------------\nm = P V M / (Z R T)\n\nM = massa molar em kg/mol.\n\n7. NÚMERO DE MOLS\n-----------------\nn = m / M\n\n8. DENSIDADE CALCULADA\n----------------------\nρ = P M / (Z R T)\n\nUnidade: kg/m³.\n\n9. MASSA ESPECÍFICA INFORMADA PELO POSTO\n----------------------------------------\nO programa permite registrar separadamente a massa específica informada pelo posto, em kg/m³.\n\nEsse valor não substitui automaticamente a densidade calculada pelo modelo. Os dois valores permanecem separados para comparação e auditoria.\n\n10. VOLUME ESPECÍFICO\n---------------------\nv = V / m\n\nUnidade: m³/kg.\n\n11. VOLUME EQUIVALENTE DE REFERÊNCIA\n------------------------------------\nO programa converte os mols calculados para uma condição de referência de 20 °C e 1,01325 bar, usando Z=1 nessa conversão atual:\n\nV_ref = n R T_ref / P_ref\n\nEsse é o VOLUME EQUIVALENTE. Ele não representa o volume físico ocupado pelo gás dentro do cilindro.\n\n12. COMPARAÇÃO DO ABASTECIMENTO\n-------------------------------\nNa aba Abastecimentos, o programa registra pressão inicial e final. A quantidade adicionada teoricamente é obtida por:\n\nΔn = n_final - n_inicial\n\nonde:\n\nn = P_abs V / (Z R T)\n\nDepois, Δn é convertido para m³ equivalentes na condição de referência e comparado com o volume registrado pela bomba.\n\n13. INTERPRETAÇÃO DOS RESULTADOS\n--------------------------------\nUma diferença entre o volume teórico e o volume indicado pela bomba não prova isoladamente uma fraude. É necessário considerar condições de referência, temperatura, composição do gás, fator Z, modelo termodinâmico e tolerâncias/metrologia do equipamento de abastecimento.\n\nEsta aba existe para tornar transparente de onde cada número do relatório veio e quais informações foram usadas para obtê-lo.\n'
+        self.texto_formulas.insert(
+            tk.END,
+            texto_formulas.strip()
+        )
+        self.texto_formulas.configure(
+            state="disabled"
+        )
 
 # PARTE 406
 # BOTÃO PDF
@@ -7686,6 +7731,9 @@ class InterfaceGNV:
             altitude = converter_numero(self.entry_altitude.get())
             fator_z = converter_numero(self.entry_fator_z.get())
             massa_molar = converter_numero(self.entry_massa_molar.get())
+            densidade_informada = converter_numero(self.entry_densidade_informada.get())
+            if densidade_informada <= 0:
+                raise ValueError("Informe a massa específica do GNV em kg/m³.")
 
         except ValueError:
 
@@ -7709,7 +7757,8 @@ class InterfaceGNV:
             temperatura,
             altitude,
             fator_z,
-            massa_molar
+            massa_molar,
+            densidade_informada
         )
 
         self.texto_resultados.delete(
@@ -7769,6 +7818,11 @@ class InterfaceGNV:
 
         self.texto_resultados.insert(
             tk.END,
+            f"Massa específica informada: {formatar_numero_br(densidade_informada, 3)} kg/m³\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
             f"GNV equivalente (20 °C)...: {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
         )
 
@@ -7813,7 +7867,13 @@ class InterfaceGNV:
 
             ("Massa de GNV", resultado["massa"], "kg", 6),
 
-            ("Densidade do GNV", resultado["densidade"], "kg/m³", 6),
+            ("Densidade calculada no cilindro", resultado["densidade"], "kg/m³", 3),
+
+            ("Massa específica de referência", densidade_informada, "kg/m³", 3),
+
+            ("Massa estimada pela densidade de referência", resultado["massa_referencia_informada_kg"], "kg", 6),
+
+            ("Diferença de massa entre modelos", resultado["diferenca_massa_referencia_kg"], "kg", 6),
 
             ("Quantidade de matéria", resultado["mols"], "mol", 6),
 
@@ -10653,7 +10713,9 @@ class InterfaceGNV:
 
                 pressao_inicial=converter_numero(self.entry_pressao_inicial.get()),
 
-                pressao_final=converter_numero(self.entry_pressao_final.get())
+                pressao_final=converter_numero(self.entry_pressao_final.get()),
+
+                densidade_informada_kg_m3=converter_numero(self.entry_densidade_informada_abastecimento.get())
 
             )
 
@@ -10685,6 +10747,7 @@ class InterfaceGNV:
                 f"Capacidade do cilindro : {formatar_numero_br(abastecimento.capacidade_cilindro_l, 2)} L\n"
                 f"Pressão inicial        : {formatar_numero_br(abastecimento.pressao_inicial, 2)} bar\n"
                 f"Pressão final          : {formatar_numero_br(abastecimento.pressao_final, 2)} bar\n"
+                f"Massa específica posto : {formatar_numero_br(abastecimento.densidade_informada_kg_m3, 3)} kg/m³\n"
                 f"Δ pressão              : {formatar_numero_br(comparacao['delta_pressao_bar'], 2)} bar\n\n"
                 f"Volume da bomba        : {formatar_numero_br(volume_bomba, 3)} m³\n"
                 f"Volume teórico         : {formatar_numero_br(volume_teorico, 3)} m³\n"
@@ -12992,3 +13055,19 @@ if __name__ == "__main__":
     )
 
     janela.mainloop()
+
+
+# =============================================================================
+# COMMIT GIT (PORTUGUÊS)
+# =============================================================================
+# feat: reorganiza aba Cálculos e documenta fórmulas e fator Z
+#
+# - aceita números com ponto ou vírgula decimal
+# - remove o título duplicado "Resultados" da área de cálculo
+# - reposiciona os botões acima da área de resultados
+# - adiciona a aba "Fórmulas e Física"
+# - documenta o fator Z e as equações utilizadas
+# - adiciona massa específica informada pelo posto nos cálculos
+# - compara densidade informada e densidade calculada
+# - registra massa específica nos abastecimentos
+# - mantém unidades físicas nos resultados
