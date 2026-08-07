@@ -1,5 +1,5 @@
 # =============================================================================
-# ARQUIVO.....: GNV.py
+# ARQUIVO.....: GNV V12.py
 # AUTOR.......: Christiano Gaio
 # OBJETIVO....: Calculadora de GNV
 #
@@ -13467,6 +13467,21 @@ if __name__ == "__main__":
 
     janela.mainloop()
 
+
+
+# - aceita números com ponto ou vírgula decimal
+# - remove duplicidade de volumes equivalentes e esclarece a condição de referência
+# - reposiciona os botões acima da área de resultados
+# - adiciona a aba "Fórmulas e Física"
+# - documenta o fator Z e as equações utilizadas
+# - usa temperatura ambiente no abastecimento como aproximação da temperatura do gás
+# - compara densidade informada e densidade calculada
+# - registra massa específica nos abastecimentos
+# - adiciona aba ANP com condição de referência oficial documentada
+# - separa cálculo de referência ANP de modelo científico com gás real
+# - elimina repetição do relatório de comparação física nas estatísticas
+# - grava metragem cúbica teórica no SQLite
+# - adiciona metragem cúbica teórica na visualização do SQLite
 
 
 
