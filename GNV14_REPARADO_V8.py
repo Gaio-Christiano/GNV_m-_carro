@@ -1,6 +1,6 @@
 # =============================================================================
-# ARQUIVO.....: GNV V12.py
-# AUTOR.......: Christiano Gaio
+# ARQUIVO.....: GNV.py
+# AUTOR.......: Christiano T.Gaio
 # OBJETIVO....: Calculadora de GNV
 #
 # DESCRIÇÃO
@@ -283,6 +283,34 @@ def calcular_volume_referencia_m3(
         mols * R * temperatura_k * fator_z_referencia
         / pressao_pa
     )
+
+
+def calcular_volume_equivalente_na_temperatura_m3(mols, temperatura_c, pressao_referencia_bar=1.01325, fator_z_referencia=1.0):
+    """Volume equivalente dos mesmos mols na temperatura informada."""
+    temperatura_k = temperatura_c + 273.15
+    pressao_pa = pressao_referencia_bar * 100000.0
+    if mols <= 0 or temperatura_k <= 0 or pressao_pa <= 0:
+        return 0.0
+    return mols * R * temperatura_k * fator_z_referencia / pressao_pa
+
+
+def calcular_compressao_ideal_adiabatica(pressao_inicial_manometrica_bar, pressao_final_manometrica_bar, temperatura_inicial_c, altitude_m=0.0, k=1.294):
+    """Modelo didático de compressão reversível adiabática; não é o enchimento real do cilindro."""
+    if k <= 1.0: raise ValueError("O expoente k deve ser maior que 1.")
+    if temperatura_inicial_c <= -273.15: raise ValueError("A temperatura inicial deve ser maior que -273,15 °C.")
+    patm=calcular_pressao_atmosferica(altitude_m); p1=pressao_inicial_manometrica_bar+patm; p2=pressao_final_manometrica_bar+patm; t1=temperatura_inicial_c+273.15
+    if p1 <= 0 or p2 <= 0 or p2 < p1: raise ValueError("As pressões devem ser positivas e a final maior ou igual à inicial.")
+    t2=t1*(p2/p1)**((k-1.0)/k); vr=(p1/p2)**(1.0/k)
+    return {"pressao_atmosferica_bar":patm,"pressao_inicial_absoluta_bar":p1,"pressao_final_absoluta_bar":p2,"temperatura_inicial_c":temperatura_inicial_c,"temperatura_final_c":t2-273.15,"temperatura_final_k":t2,"aumento_temperatura_c":t2-t1,"volume_relativo_final":vr,"reducao_volume_percentual":(1-vr)*100,"k":k}
+
+
+def gerar_pontos_compressao_adiabatica(pressao_inicial_manometrica_bar, pressao_final_manometrica_bar, temperatura_inicial_c, altitude_m=0.0, k=1.294, pontos=40):
+    patm=calcular_pressao_atmosferica(altitude_m); p1=pressao_inicial_manometrica_bar+patm; p2=pressao_final_manometrica_bar+patm; t1=temperatura_inicial_c+273.15
+    if p1 <= 0 or p2 < p1 or k <= 1: raise ValueError("Parâmetros inválidos para o gráfico de compressão.")
+    n=max(2,int(pontos)); dados=[]
+    for i in range(n):
+        f=i/(n-1); pa=p1+(p2-p1)*f; tk=t1*(pa/p1)**((k-1)/k); vr=(p1/pa)**(1/k); dados.append({"pressao_man_bar":pa-patm,"temperatura_c":tk-273.15,"volume_relativo":vr})
+    return dados
 
 
 # =============================================================================
@@ -2181,6 +2209,8 @@ def calcular_quantidade_gnv(
         "volume_especifico": volume_especifico,
 
         "volume_real": volume_real,
+
+        "volume_equivalente_m3_temperatura_informada": calcular_volume_equivalente_na_temperatura_m3(mols, temperatura_c, 1.01325, 1.0),
 
         "volume_equivalente_m3_20c": calcular_volume_referencia_m3(
             mols,
@@ -5095,6 +5125,12 @@ class InterfaceGNV:
 
         )
 
+        self.aba_compressao = ttk.Frame(
+
+            self.notebook
+
+        )
+
         self.aba_historico = ttk.Frame(
 
             self.notebook
@@ -5157,6 +5193,14 @@ class InterfaceGNV:
             self.aba_anp,
 
             text="ANP"
+
+        )
+
+        self.notebook.add(
+
+            self.aba_compressao,
+
+            text="Compressão / Temperatura"
 
         )
 
@@ -6585,125 +6629,43 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 # ABA ANP - CONDIÇÃO DE REFERÊNCIA
 # =============================================================================
 
-        frame_anp = ttk.Frame(self.aba_anp, padding=15)
-        frame_anp.pack(fill="both", expand=True)
-
-        ttk.Label(
-            frame_anp,
-            text="Cálculo pela condição de referência publicada pela ANP",
-            font=("Arial", 15, "bold")
-        ).pack(anchor="w", pady=(0, 8))
-
-        texto_anp = tk.Text(
-            frame_anp,
-            wrap="word",
-            font=("Segoe UI", 10),
-            height=22
-        )
-        texto_anp.pack(fill="both", expand=True)
-
-        texto_anp.insert(tk.END, """CÁLCULO PELA CONDIÇÃO DE REFERÊNCIA DA ANP
-============================================================
-
-A ANP publica volumes de gás natural equivalentes a 20 °C e
-1,033 kgf/cm². A condição padrão de medição também é expressa
-como 0,101325 MPa e 20 °C.
-
-No programa, a condição é representada internamente por:
-  Temperatura de referência: 20,00 °C
-  Pressão de referência: 1,01325 bar
-
-IMPORTANTE
-----------
-Este cálculo é uma ESTIMATIVA baseada na condição de referência
-da ANP. Ele não reproduz o algoritmo, o sensor ou a compensação
-metrológica interna do dispenser do posto.
-
-Para a estimativa são utilizados:
-  • volume físico interno do cilindro;
-  • pressão inicial e final informadas pelo usuário;
-  • pressão atmosférica estimada pela altitude;
-  • temperatura ambiente observada;
-  • aproximação de gás ideal (Z = 1).
-
-FÓRMULA
--------
-Vref = Vcilindro × (Pfinal_abs - Pinicial_abs) / Pref × Tref / T
-
-onde:
-  Vref = volume equivalente na referência, em m³
-  Vcilindro = capacidade física do cilindro, em m³
-  P_abs = pressão absoluta, em bar
-  Pref = 1,01325 bar
-  Tref = 293,15 K
-  T = temperatura ambiente + 273,15 K
-
-A pressão absoluta é calculada por:
-  P_abs = P_manométrica + P_atmosférica
-
-LIMITAÇÃO
----------
-A temperatura ambiente não é a temperatura real do gás durante
-a compressão. O gás pode aquecer durante o abastecimento. Portanto,
-o resultado deve ser interpretado como uma estimativa física de
-referência e não como uma medição direta do volume entregue.
-
-FONTE OFICIAL
--------------
-ANP - Publicidade dos Preços de Gás Natural:
-https://www.gov.br/anp/pt-br/assuntos/movimentacao-estocagem-e-comercializacao-de-gas-natural/acompanhamento-do-mercado-de-gas-natural/publicidade-dos-precos-de-gas-natural
-
-ANP - Glossário, condição padrão de medição:
-https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
-""")
-        texto_anp.configure(state="disabled")
-
+        frame_anp=ttk.Frame(self.aba_anp,padding=12); frame_anp.pack(fill="both",expand=True)
+        ttk.Label(frame_anp,text="Cálculo pela condição de referência da ANP",font=("Arial",15,"bold")).pack(anchor="w",pady=(0,6))
+        texto_anp=tk.Text(frame_anp,wrap="word",font=("Consolas",10)); texto_anp.pack(fill="both",expand=True)
         def atualizar_calculo_anp_tela():
             try:
-                capacidade = converter_numero(self.entry_capacidade_cilindro.get())
-                p_i = converter_numero(self.entry_pressao_inicial.get())
-                p_f = converter_numero(self.entry_pressao_final.get())
-                temp = converter_numero(self.entry_temp_abastecimento.get())
-                altitude = converter_numero(self.entry_altitude_abastecimento.get())
-                volume_bomba = converter_numero(self.entry_volume_abastecido.get() or "0")
+                c=converter_numero(self.entry_capacidade_cilindro.get()); pi=converter_numero(self.entry_pressao_inicial.get()); pf=converter_numero(self.entry_pressao_final.get()); temp=converter_numero(self.entry_temp_abastecimento.get()); alt=converter_numero(self.entry_altitude_abastecimento.get()); bomba=converter_numero(self.entry_volume_abastecido.get() or "0")
+                v=calcular_volume_anp_referencia(c,pi,pf,temp,alt); patm=calcular_pressao_atmosferica(alt); pia=pi+patm; pfa=pf+patm; dif=bomba-v; pct=(dif/v*100) if v else 0
+                texto_anp.delete("1.0","end"); texto_anp.insert(tk.END,"CÁLCULO EXCLUSIVO PELA CONDIÇÃO DE REFERÊNCIA DA ANP\n"+"="*60+"\n\n"+f"Volume físico do cilindro : {formatar_numero_br(c/1000,6)} m³\n"+f"Pressão inicial            : {formatar_numero_br(pi,4)} bar\n"+f"Pressão final              : {formatar_numero_br(pf,4)} bar\n"+f"Pressão atmosférica        : {formatar_numero_br(patm,5)} bar\n"+f"Pressão inicial absoluta   : {formatar_numero_br(pia,5)} bar\n"+f"Pressão final absoluta     : {formatar_numero_br(pfa,5)} bar\n"+f"Temperatura ambiente       : {formatar_numero_br(temp,2)} °C\n\n"+"REFERÊNCIA ANP\nTref = 20 °C = 293,15 K\nPref = 1,033 kgf/cm² ≈ 1,01325 bar\n\n"+"FÓRMULA APLICADA NESTA ABA\nVref = Vcil × (Pfinal_abs − Pinicial_abs) / Pref × Tref / T\n\n"+f"VOLUME EQUIVALENTE ANP    : {formatar_numero_br(v,5)} m³\n"+f"VOLUME EQUIVALENTE ANP    : {formatar_numero_br(v*1000,2)} L equivalentes\n"+f"VOLUME INDICADO PELA BOMBA: {formatar_numero_br(bomba,5)} m³\n"+f"DIFERENÇA BOMBA − ANP     : {formatar_numero_br(dif,5)} m³\n"+f"DIFERENÇA PERCENTUAL      : {formatar_numero_br(pct,2)} %\n\n"+"Nesta aba NÃO é usado o Z da aba Cálculos, massa molar ou modelo de gás real.\n"+"A temperatura disponível é a ambiente, não a temperatura real medida do GNV.\n"+"A ANP define a condição de referência; este cálculo não reproduz o algoritmo ou sensor do dispenser.")
+            except (ValueError,ZeroDivisionError) as e: messagebox.showerror("Cálculo ANP",str(e))
+        ttk.Button(frame_anp,text="Calcular exclusivamente pela referência ANP",command=atualizar_calculo_anp_tela).pack(anchor="w",pady=6)
+        texto_anp.insert(tk.END,"Clique no botão para calcular somente pelo modelo de referência ANP.\n")
 
-                volume_anp = calcular_volume_anp_referencia(
-                    capacidade, p_i, p_f, temp, altitude
-                )
+# =============================================================================
+# ABA COMPRESSÃO / TEMPERATURA
+# =============================================================================
 
-                texto_anp.configure(state="normal")
-                texto_anp.delete("1.0", "end")
-                texto_anp.insert(
-                    tk.END,
-                    "CÁLCULO PELA CONDIÇÃO DE REFERÊNCIA DA ANP\n"
-                    "============================================================\n\n"
-                    f"Capacidade física do cilindro : {formatar_numero_br(capacidade, 2)} L\n"
-                    f"Pressão inicial                : {formatar_numero_br(p_i, 2)} bar\n"
-                    f"Pressão final                  : {formatar_numero_br(p_f, 2)} bar\n"
-                    f"Temperatura ambiente           : {formatar_numero_br(temp, 2)} °C\n"
-                    f"Altitude                       : {formatar_numero_br(altitude, 2)} m\n\n"
-                    f"Volume equivalente estimado    : {formatar_numero_br(volume_anp, 4)} m³\n"
-                    f"Volume equivalente estimado    : {formatar_numero_br(volume_anp * 1000, 2)} L\n"
-                    f"Volume indicado pela bomba     : {formatar_numero_br(volume_bomba, 4)} m³\n"
-                    f"Diferença bomba - estimativa   : {formatar_numero_br(volume_bomba-volume_anp, 4)} m³\n\n"
-                    "CONDIÇÃO DE REFERÊNCIA\n"
-                    "20 °C / 1,033 kgf/cm² (aprox. 1,01325 bar)\n"
-                    "Modelo: gás ideal (Z = 1).\n\n"
-                    "ATENÇÃO\n"
-                    "Esta é uma estimativa baseada na condição de referência\n"
-                    "publicada pela ANP. Não é a leitura nem o algoritmo\n"
-                    "de compensação metrológica do dispenser. A temperatura\n"
-                    "usada é a temperatura ambiente observada.\n"
-                )
-                texto_anp.configure(state="disabled")
-            except (ValueError, ZeroDivisionError) as erro:
-                messagebox.showerror("Cálculo ANP", str(erro))
-
-        ttk.Button(
-            frame_anp,
-            text="Calcular usando os dados da aba Abastecimentos",
-            command=atualizar_calculo_anp_tela
-        ).pack(anchor="w", pady=(8, 0))
+        fc=ttk.Frame(self.aba_compressao,padding=10); fc.pack(fill="both",expand=True)
+        ttk.Label(fc,text="Aquecimento durante compressão — modelo termodinâmico idealizado",font=("Arial",15,"bold")).pack(anchor="w",pady=(0,4))
+        ttk.Label(fc,text="O enchimento real não é uma compressão adiabática simples. Esta aba mostra o cenário idealizado e não mede a temperatura real do GNV.",wraplength=1250).pack(anchor="w",pady=(0,5))
+        fi=ttk.Frame(fc); fi.pack(fill="x")
+        for col,(lab,attr,val) in enumerate([("P inicial manométrica (bar)","comp_pi","1"),("P final manométrica (bar)","comp_pf","220"),("T inicial (°C)","comp_ti","24"),("Altitude (m)","comp_alt","0"),("k = Cp/Cv","comp_k","1,294")]):
+            ttk.Label(fi,text=lab).grid(row=0,column=col,padx=3,sticky="w"); e=ttk.Entry(fi,width=13); e.grid(row=1,column=col,padx=3); e.insert(0,val); setattr(self,attr,e)
+        self.texto_comp_info=tk.Text(fc,height=7,wrap="word",font=("Consolas",9)); self.texto_comp_info.pack(fill="x",pady=4)
+        fg=ttk.Frame(fc); fg.pack(fill="both",expand=True); fg.grid_columnconfigure(0,weight=1); fg.grid_columnconfigure(1,weight=1); fg.grid_rowconfigure(0,weight=1); fg.grid_rowconfigure(1,weight=1)
+        self.canvas_pt_comp=tk.Canvas(fg,background="white"); self.canvas_tv_comp=tk.Canvas(fg,background="white"); self.canvas_vp_comp=tk.Canvas(fg,background="white")
+        self.canvas_pt_comp.grid(row=0,column=0,sticky="nsew",padx=3,pady=3); self.canvas_tv_comp.grid(row=0,column=1,sticky="nsew",padx=3,pady=3); self.canvas_vp_comp.grid(row=1,column=0,columnspan=2,sticky="nsew",padx=3,pady=3)
+        def plot(cv,ds,xk,yk,title,xlab,ylab):
+            cv.delete("all"); cv.update_idletasks(); w=max(cv.winfo_width(),450); h=max(cv.winfo_height(),170); xs=[d[xk] for d in ds]; ys=[d[yk] for d in ds]; xmin,xmax=min(xs),max(xs); ymin,ymax=min(ys),max(ys); xmax=xmax if xmax!=xmin else xmin+1; ymax=ymax if ymax!=ymin else ymin+1; ml,mr,mt,mb=55,15,25,30; X=lambda x:ml+(x-xmin)/(xmax-xmin)*(w-ml-mr); Y=lambda y:h-mb-(y-ymin)/(ymax-ymin)*(h-mt-mb); cv.create_text(w/2,12,text=title,font=("Arial",9,"bold")); cv.create_line(ml,mt,ml,h-mb); cv.create_line(ml,h-mb,w-mr,h-mb); cv.create_text(w/2,h-10,text=xlab); cv.create_text(12,h/2,text=ylab,angle=90); pts=[]
+            for x,y in zip(xs,ys): pts += [X(x),Y(y)]
+            cv.create_line(*pts,fill="#1f4e79",width=2)
+        def atual_comp():
+            try:
+                pi=converter_numero(self.comp_pi.get()); pf=converter_numero(self.comp_pf.get()); ti=converter_numero(self.comp_ti.get()); alt=converter_numero(self.comp_alt.get()); k=converter_numero(self.comp_k.get()); m=calcular_compressao_ideal_adiabatica(pi,pf,ti,alt,k); ds=gerar_pontos_compressao_adiabatica(pi,pf,ti,alt,k,40)
+                self.texto_comp_info.delete("1.0","end"); self.texto_comp_info.insert(tk.END,"MODELO ADIABÁTICO IDEALIZADO\n"+f"T inicial: {formatar_numero_br(ti,2)} °C | T final idealizada: {formatar_numero_br(m['temperatura_final_c'],2)} °C | ΔT: {formatar_numero_br(m['aumento_temperatura_c'],2)} °C\n"+f"V final/V inicial: {formatar_numero_br(m['volume_relativo_final']*100,2)} % | redução de V: {formatar_numero_br(m['reducao_volume_percentual'],2)} %\n\nT₂/T₁=(P₂/P₁)^((k−1)/k)   V₂/V₁=(P₁/P₂)^(1/k)   P·V^k=constante.\nForma logarítmica para análise de gráficos: ln(T₂/T₁)=((k−1)/k)·ln(P₂/P₁).\nATENÇÃO: cenário idealizado; o abastecimento real é um sistema aberto e troca calor com cilindro/ambiente.")
+                plot(self.canvas_pt_comp,ds,"pressao_man_bar","temperatura_c","Pressão × temperatura","Pressão (bar)","T (°C)"); plot(self.canvas_tv_comp,ds,"temperatura_c","pressao_man_bar","Temperatura × pressão","T (°C)","P (bar)"); plot(self.canvas_vp_comp,ds,"pressao_man_bar","volume_relativo","Pressão × volume relativo","Pressão (bar)","V/V₀")
+            except (ValueError,ZeroDivisionError) as e: messagebox.showerror("Compressão / Temperatura",str(e))
+        ttk.Button(fc,text="Calcular e atualizar gráficos",command=atual_comp).pack(anchor="w",pady=4); self.janela.after(400,atual_comp)
 
 
 # =============================================================================
@@ -8203,7 +8165,12 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 
         self.texto_resultados.insert(
             tk.END,
-            f"Volume de referência (20 °C): {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
+            f"Volume equivalente na temperatura informada: {formatar_numero_br(resultado['volume_equivalente_m3_temperatura_informada'], 3)} m³\n"
+        )
+
+        self.texto_resultados.insert(
+            tk.END,
+            f"Volume equivalente na referência ANP (20 °C): {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
         )
 
         self.texto_resultados.insert(
@@ -8263,7 +8230,9 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 
             ("Volume físico ocupado", resultado["volume_real"], "m³", 6),
 
-            ("Volume de referência a 20 °C", resultado["volume_equivalente_m3_20c"], "m³", 3),
+            ("Volume equivalente na temperatura informada", resultado["volume_equivalente_m3_temperatura_informada"], "m³", 3),
+
+            ("Volume equivalente na referência ANP (20 °C)", resultado["volume_equivalente_m3_20c"], "m³", 3),
 
         ]
 
@@ -13468,7 +13437,11 @@ if __name__ == "__main__":
     janela.mainloop()
 
 
-
+# =============================================================================
+# COMMIT GIT (PORTUGUÊS)
+# =============================================================================
+# feat: corrige referências físicas e responsividade das abas
+#
 # - aceita números com ponto ou vírgula decimal
 # - remove duplicidade de volumes equivalentes e esclarece a condição de referência
 # - reposiciona os botões acima da área de resultados
@@ -13482,6 +13455,7 @@ if __name__ == "__main__":
 # - elimina repetição do relatório de comparação física nas estatísticas
 # - grava metragem cúbica teórica no SQLite
 # - adiciona metragem cúbica teórica na visualização do SQLite
+
 
 
 
