@@ -1,5 +1,5 @@
 # =============================================================================
-# ARQUIVO.....: GNV14_REPARADO_V14.py
+# ARQUIVO.....: GNV14_REPARADO_V15.py
 # AUTOR.......: Christiano Gaio
 # OBJETIVO....: Calculadora de GNV
 #
@@ -2217,6 +2217,15 @@ def calcular_quantidade_gnv(
             20.0,
             1.01325,
             1.0
+        ),
+        # Conversão independente pelo modelo ANP/idealizado (Z=1),
+        # usando a variação de pressão absoluta no cilindro.
+        "volume_anp_ideal_m3_20c": calcular_volume_anp_referencia(
+            volume_cilindro_litros,
+            0.0,
+            pressao_bar,
+            temperatura_c,
+            altitude_m
         ),
 
         "densidade_informada_kg_m3": densidade_informada_kg_m3,
@@ -6365,23 +6374,39 @@ M é a massa molar do GNV em kg/mol.
 
 5. VOLUME EQUIVALENTE NA TEMPERATURA INFORMADA
 ------------------------------------------------
-Para os mesmos mols e a mesma pressão de referência:
+O programa calcula primeiro os mols a partir de PV = Z n R T.
+Depois pode expressar esses mesmos mols a uma pressão de referência:
 
-V(T) = n R T / Pref
+Vref(T) = n R T / Pref
 
-Para a MESMA quantidade de matéria, 24 °C produz volume de referência
-maior que 20 °C, porque V é proporcional à temperatura quando n e P são
-mantidos constantes.
+IMPORTANTE: neste programa, n foi calculado usando a própria temperatura
+informada. Por isso, ao substituir n = P V / (Z R T), a temperatura cancela:
 
-Isso NÃO significa que entrou mais massa no cilindro. Significa que os
-mesmos mols ocupariam mais espaço quando expressos numa temperatura de
-referência maior.
+Vref(T) = P V / (Z Pref)
 
-No programa:
-• Volume equivalente na temperatura informada = mesmos mols expressos
-  à temperatura ambiente informada.
-• Volume equivalente na referência ANP = mesmos mols expressos a 20 °C
-  e 1,01325 bar.
+Assim, para um cilindro de 26 L a 220 bar e Z=0,92, o volume equivalente
+a 1,01325 bar na temperatura informada pode permanecer praticamente
+6,164 m³ tanto a 5 °C quanto a 20 °C ou 100 °C. Isso NÃO significa que
+a mesma quantidade de gás teria o mesmo volume em duas temperaturas quando
+n é mantido fixo; significa que o programa está recalculando a quantidade
+de matéria para cada estado de pressão/temperatura informado.
+
+6. CONVERSÃO CIENTÍFICA PARA 20 °C
+----------------------------------
+Os mesmos mols calculados pelo modelo Z informado são convertidos para 20 °C:
+
+V20 = n R T20 / Pref
+
+Se a temperatura informada for menor que 20 °C, V20 tende a ser maior.
+Se for maior que 20 °C, V20 tende a ser menor, porque aqui n é mantido
+fixo durante a conversão.
+
+7. CONVERSÃO ANP/IDEALIZADA (Z=1)
+---------------------------------
+A aba ANP calcula separadamente uma estimativa com Z=1 e a condição de
+referência de 20 °C e 1,033 kgf/cm² (aproximadamente 1,01325 bar).
+Esse valor não deve ser confundido com o resultado científico que usa
+Z=0,92, por exemplo. São dois modelos diferentes.
 
 6. DENSIDADE DO GÁS REAL
 ------------------------
@@ -6450,6 +6475,15 @@ https://www.iso.org/standard/44411.html
 
 ISO 12213-3:2006 — cálculo do fator de compressibilidade por propriedades:
 https://www.iso.org/standard/44412.html
+
+MIT OpenCourseWare — Thermodynamics: equação de estado do gás ideal PV = nRT:
+https://ocw.mit.edu/courses/5-60-thermodynamics-kinetics-spring-2008/
+
+MIT OpenCourseWare — Materials at Equilibrium: propriedades de gases ideais e PV = nRT:
+https://ocw.mit.edu/courses/3-20-materials-at-equilibrium-sma-5111-fall-2003/
+
+Purdue University — Thermodynamics, Fluid Mechanics and Gas Dynamics: gás ideal e fator de compressibilidade Z:
+https://engineering.purdue.edu/~wassgren/teaching/ME20000/NotesAndReading/Lec11_Reading_Wassgren.pdf
 
 NIST — REFPROP / propriedades de misturas e AGA8:
 https://www.nist.gov/srd/refprop
@@ -6770,11 +6804,11 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
                     "Tref = 20 °C = 293,15 K",
                     "Pref = 1,033 kgf/cm² (aprox. 1,01325 bar)",
                     "",
-                    "ESTIMATIVA FÍSICA PARA CONVERSÃO",
+                    "ESTIMATIVA FÍSICA ANP/IDEALIZADA (Z=1)",
                     "Vref = Vcil × (Pfinal_abs − Pinicial_abs) / Pref × Tref / T",
                     "",
-                    f"VOLUME EQUIVALENTE NA REFERÊNCIA ANP : {formatar_numero_br(v, 5)} m³",
-                    f"VOLUME EQUIVALENTE NA REFERÊNCIA ANP : {formatar_numero_br(v * 1000.0, 2)} L equivalentes",
+                    f"VOLUME ADICIONADO EQUIVALENTE ANP/IDEALIZADO : {formatar_numero_br(v, 5)} m³",
+                    f"VOLUME ADICIONADO EQUIVALENTE ANP/IDEALIZADO : {formatar_numero_br(v * 1000.0, 2)} L equivalentes",
                     "",
                     "INTERPRETAÇÃO",
                     "O valor acima NÃO é a capacidade física do cilindro.",
@@ -8314,7 +8348,7 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
         self.texto_resultados.insert(
             tk.END,
-            f"Volume do cilindro........: {formatar_numero_br(volume_total, 2)} L\n"
+            f"Capacidade física total....: {formatar_numero_br(volume_total, 2)} L\n"
         )
 
         self.texto_resultados.insert(
@@ -8354,14 +8388,16 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
         self.texto_resultados.insert(
             tk.END,
-            f"Volume equivalente na temperatura informada: {formatar_numero_br(resultado['volume_equivalente_m3_temperatura_informada'], 3)} m³\n"
-            "(mesmos mols expressos à temperatura ambiente informada)\n"
+            f"Volume TOTAL equivalente a 1,01325 bar na T informada: {formatar_numero_br(resultado['volume_equivalente_m3_temperatura_informada'], 3)} m³\n"
+            "(quantidade TOTAL presente no cilindro, calculada com Z informado)\n"
         )
 
         self.texto_resultados.insert(
             tk.END,
-            f"Volume equivalente na referência ANP (20 °C): {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
-            "(mesmos mols expressos a 20 °C e 1,01325 bar)\n"
+            f"Volume TOTAL equivalente científico a 20 °C: {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
+            "(mesma quantidade TOTAL de matéria, expressa a 20 °C)\n"
+            f"Volume ADICIONADO ANP/idealizado (Z=1) a 20 °C: {formatar_numero_br(resultado['volume_anp_ideal_m3_20c'], 3)} m³\n"
+            "(somente a variação entre pressão inicial e final)\n"
         )
 
         self.texto_resultados.insert(
@@ -8369,6 +8405,9 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
             "Observação: o volume de referência não é o volume físico do cilindro.\n"
             "É o volume que a mesma quantidade de matéria ocuparia a 20 °C e\n"
             "1,01325 bar, usando Z de referência igual a 1.\n"
+            "IMPORTANTE: esta aba calcula a quantidade TOTAL presente no cilindro.\n"
+            "Na aba Abastecimentos calcula-se somente o GÁS ADICIONADO, isto é,\n"
+            "a diferença entre a pressão final e a pressão inicial.\n"
         )
 
         self.texto_resultados.insert(
@@ -11301,9 +11340,8 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
             self.texto_comparacao_abastecimento.delete("1.0", "end")
             self.texto_comparacao_abastecimento.insert(
                 tk.END,
-                "=" * 62 + "\n"
                 "ANÁLISE FÍSICA DO ABASTECIMENTO\n"
-                "=" * 62 + "\n\n"
+                "----------------------------------------\n\n"
                 f"Capacidade do cilindro : {formatar_numero_br(abastecimento.capacidade_cilindro_l, 2)} L\n"
                 f"Pressão inicial        : {formatar_numero_br(abastecimento.pressao_inicial, 2)} bar\n"
                 f"Pressão final          : {formatar_numero_br(abastecimento.pressao_final, 2)} bar\n"
@@ -11312,7 +11350,7 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
                 f"Δ pressão              : {formatar_numero_br(comparacao['delta_pressao_bar'], 2)} bar\n\n"
                 f"Volume indicado pela bomba              : {formatar_numero_br(volume_bomba, 3)} m³\n"
                 f"Estimativa pela referência ANP (Z=1)    : {formatar_numero_br(calcular_volume_anp_referencia(abastecimento.capacidade_cilindro_l, abastecimento.pressao_inicial, abastecimento.pressao_final, abastecimento.temperatura, abastecimento.altitude), 3)} m³\n"
-                f"Modelo científico com gás real (Z={formatar_numero_br(comparacao['fator_z'], 4)}) : {formatar_numero_br(volume_teorico, 3)} m³\n"
+                f"Modelo científico com gás real (Z={formatar_numero_br(comparacao['fator_z'], 4)}) : {formatar_numero_br(volume_teorico, 3)} m³\n"                f"Observação: ANP/idealizado e modelo científico Z≠1 são modelos diferentes.\n"
                 f"Diferença bomba - científico             : {formatar_numero_br(diferenca, 3)} m³\n"
                 f"Diferença percentual                     : {formatar_numero_br(percentual, 2)} %\n"
                 f"Relação bomba / científico               : {formatar_numero_br(eficiencia, 2)} %\n"
@@ -13632,6 +13670,16 @@ if __name__ == "__main__":
 # =============================================================================
 # COMMIT GIT (PORTUGUÊS)
 # =============================================================================
+# feat: corrige modelos de referência e documentação física do GNV
+#
+# - distingue claramente modelo científico com Z informado de ANP/idealizado Z=1
+# - corrige os rótulos de volume equivalente para evitar interpretação errada
+# - documenta o cancelamento de T no volume equivalente a pressão fixa
+# - adiciona referências acadêmicas do MIT OpenCourseWare e Purdue University
+# - mantém referências ANP, ISO 12213 e NIST
+# - simplifica o cabeçalho da análise de abastecimento
+# - preserva a entrada de temperatura ambiente como aproximação no abastecimento
+#
 # feat: corrige referências físicas e responsividade das abas
 #
 # - aceita números com ponto ou vírgula decimal
@@ -13644,9 +13692,11 @@ if __name__ == "__main__":
 # - registra massa específica nos abastecimentos
 # - adiciona aba ANP com campos próprios e condição de referência oficial documentada
 # - separa cálculo de referência ANP de modelo científico com gás real
+# - diferencia quantidade TOTAL armazenada de quantidade ADICIONADA no abastecimento
 # - elimina repetição do relatório de análise física nas estatísticas
 # - grava metragem cúbica teórica no SQLite
 # - adiciona metragem cúbica teórica na visualização do SQLite
+
 
 
 
