@@ -1,6 +1,6 @@
 # =============================================================================
-# ARQUIVO.....: GNV.py
-# AUTOR.......: Christiano T.Gaio
+# ARQUIVO.....: GNV14_REPARADO_V14.py
+# AUTOR.......: Christiano Gaio
 # OBJETIVO....: Calculadora de GNV
 #
 # DESCRIÇÃO
@@ -314,7 +314,7 @@ def gerar_pontos_compressao_adiabatica(pressao_inicial_manometrica_bar, pressao_
 
 
 # =============================================================================
-# PARTE 02C - COMPARAÇÃO FÍSICA DO ABASTECIMENTO
+# PARTE 02C - ANÁLISE FÍSICA DO ABASTECIMENTO
 # =============================================================================
 
 def calcular_comparacao_abastecimento(
@@ -6065,16 +6065,14 @@ class InterfaceGNV:
 
         )
 
+        self.texto_comparacao_abastecimento.delete("1.0", "end")
         self.texto_comparacao_abastecimento.insert(
-
             tk.END,
-
-            "Preencha capacidade, pressão inicial e final e os dados da bomba.\\n"
-
-            "Depois de salvar, o programa calculará o volume teórico equivalente\\n"
-
-            "a 20 °C e 1,01325 bar e comparará com o volume indicado pela bomba."
-
+            "RESULTADO DA ANÁLISE DO ABASTECIMENTO\n"
+            "========================================\n\n"
+            "Preencha os dados à esquerda e clique em 'Salvar Abastecimento'.\n"
+            "A temperatura solicitada é a temperatura AMBIENTE, pois normalmente\n"
+            "não temos a temperatura real do GNV dentro do cilindro durante o enchimento.\n"
         )
 
         self.frame_abastecimentos.grid_columnconfigure(2, weight=1)
@@ -6290,136 +6288,174 @@ class InterfaceGNV:
         texto_formulas = """FÓRMULAS E FÍSICA DO SISTEMA DE CÁLCULO DE GNV
 ============================================================
 
-PARTE A - CÁLCULOS PELA CONDIÇÃO DE REFERÊNCIA DA ANP
-============================================================
+PARTE A — CONDIÇÃO DE REFERÊNCIA DA ANP
+========================================
 
-A ANP publica volumes de gás natural equivalentes a 20 °C e
-1,033 kgf/cm². A condição padrão de medição também é definida
-como 0,101325 MPa e 20 °C.
+A ANP informa, para volumes médios comercializados de gás natural,
+condições de referência de 20 °C e 1,033 kgf/cm². A condição padrão de
+medição é definida como pressão absoluta de 0,101325 MPa e temperatura
+de 20 °C.
 
-No programa, usamos 1,01325 bar como representação SI da condição
-padrão de 0,101325 MPa. A diferença causada pelo arredondamento
-entre 1,033 kgf/cm² e 1,01325 bar é muito pequena.
+IMPORTANTE: a ANP define a condição de referência. A fórmula implementada
+neste programa é uma ESTIMATIVA FÍSICA DE CONVERSÃO e não afirma reproduzir
+o algoritmo interno de um dispenser de GNV.
 
 1. VOLUME FÍSICO DO CILINDRO
 ----------------------------
-Vcilindro(m³) = capacidade(L) / 1000
+Vcil = capacidade(L) / 1000
 
-Exemplo:
-26 L / 1000 = 0,026 m³
+26 L / 1000 = 0,026 m³.
 
-Esse é o espaço físico interno do cilindro. Não é a quantidade
-de GNV indicada pela bomba em m³.
+Esse é o espaço físico interno do cilindro. Não é o volume normalizado
+indicado pela bomba.
 
 2. PRESSÃO ABSOLUTA
 -------------------
 Pabs = Pmanométrica + Patm
 
-A equação dos gases utiliza pressão absoluta.
+As equações de estado usam pressão absoluta.
 
 3. TEMPERATURA ABSOLUTA
 -----------------------
 T(K) = T(°C) + 273,15
 
-4. ESTIMATIVA DE VOLUME PELA REFERÊNCIA ANP
---------------------------------------------
-Vref = Vcilindro × (Pfinal_abs - Pinicial_abs) / Pref × Tref / T
+4. CONVERSÃO PARA 20 °C
+-----------------------
+Para uma quantidade de matéria fixa, em modelo ideal:
 
-Pref = 1,01325 bar
-Tref = 293,15 K (20 °C)
+Vref = V × (P/Pref) × (Tref/T)
 
-Este modelo é uma estimativa com gás ideal (Z=1). Ele não é o
-algoritmo interno de compensação do dispenser.
+Tref = 293,15 K e Pref ≈ 1,01325 bar.
 
-5. O QUE A ANP ESTÁ DIZENDO
-----------------------------
-A referência de 20 °C e 1,033 kgf/cm² serve para tornar volumes
-comparáveis em uma mesma condição. Isso não significa que o cilindro
-de 26 L passe a ter 5.000 ou 6.000 litros de capacidade física.
+PARTE B — MODELO CIENTÍFICO DE GÁS REAL
+========================================
 
-PARTE B - CÁLCULO CIENTÍFICO DE GÁS REAL
-==========================================
-
-1. LEI DOS GASES REAIS
-----------------------
+1. EQUAÇÃO DE ESTADO
+--------------------
 P V = Z n R T
 
 n = P V / (Z R T)
 
-P = pressão absoluta em Pa
-V = volume físico em m³
+P = pressão absoluta (Pa)
+V = volume físico (m³)
 Z = fator de compressibilidade
-n = quantidade de matéria em mol
+n = quantidade de matéria (mol)
 R = 8,314462618 J/(mol·K)
-T = temperatura absoluta em K
+T = temperatura absoluta (K)
 
-2. FATOR Z
------------
-Z mede o afastamento do gás real em relação ao gás ideal.
+2. FATOR DE COMPRESSIBILIDADE Z
+-------------------------------
+Z = P V / (n R T)
 
-Z = 1  -> modelo ideal
-Z < 1 ou Z > 1 -> comportamento real corrigido
+Z = 1 representa o gás ideal. Para gás natural real, Z depende de
+pressão, temperatura e composição. Um Z fixo informado pelo usuário é
+uma aproximação, não uma determinação metrológica de Z.
 
-O programa permite informar Z. Um único Z constante é uma aproximação.
-Para um cálculo termodinâmico de maior precisão seriam necessários
-a composição do GNV e um modelo de propriedades validado, como
-AGA8/GERG-2008 ou outro EOS adequado.
-
-3. QUANTIDADE DE GNV ADICIONADA
+3. QUANTIDADE DE GÁS ADICIONADA
 -------------------------------
 n_inicial = P_inicial_abs × V / (Z R T)
-n_final   = P_final_abs   × V / (Z R T)
-Δn = n_final - n_inicial
+n_final   = P_final_abs × V / (Z R T)
+Δn = n_final − n_inicial
 
-4. MASSA DE GNV
----------------
+4. MASSA ADICIONADA
+-------------------
 m = Δn × M
 
-M = massa molar em kg/mol
+M é a massa molar do GNV em kg/mol.
 
-5. VOLUME EQUIVALENTE NA REFERÊNCIA
-------------------------------------
-Depois de calcular Δn, o programa converte a quantidade de matéria
-para um volume equivalente em 20 °C e 1,01325 bar:
+5. VOLUME EQUIVALENTE NA TEMPERATURA INFORMADA
+------------------------------------------------
+Para os mesmos mols e a mesma pressão de referência:
 
-Vref = Δn × R × Tref / Pref
+V(T) = n R T / Pref
 
-O nome correto é VOLUME EQUIVALENTE DE REFERÊNCIA. Ele não é o
-volume físico do cilindro.
+Para a MESMA quantidade de matéria, 24 °C produz volume de referência
+maior que 20 °C, porque V é proporcional à temperatura quando n e P são
+mantidos constantes.
+
+Isso NÃO significa que entrou mais massa no cilindro. Significa que os
+mesmos mols ocupariam mais espaço quando expressos numa temperatura de
+referência maior.
+
+No programa:
+• Volume equivalente na temperatura informada = mesmos mols expressos
+  à temperatura ambiente informada.
+• Volume equivalente na referência ANP = mesmos mols expressos a 20 °C
+  e 1,01325 bar.
 
 6. DENSIDADE DO GÁS REAL
 ------------------------
 ρ = P M / (Z R T)
 
-Unidade: kg/m³
+PARTE C — O QUE SERIA UM MODELO MAIS PRECISO
+============================================
 
-7. MASSA ESPECÍFICA INFORMADA PELO POSTO
-----------------------------------------
-O valor informado pelo posto é registrado separadamente.
-Ele não substitui automaticamente o modelo físico calculado.
+Em GNV a alta pressão, não é adequado considerar Z como uma constante
+universal. Para elevar a precisão é necessário conhecer a composição do
+gás e calcular suas propriedades termodinâmicas em função de P e T.
 
-8. TEMPERATURA NO ABASTECIMENTO
--------------------------------
-O usuário normalmente conhece a temperatura ambiente, não a
-temperatura real do GNV durante a compressão. O programa deixa isso
-explícito. Usar a temperatura ambiente é uma aproximação e pode
-introduzir erro no cálculo.
+A ISO 12213 descreve métodos para o cálculo do fator de compressibilidade
+de gás natural. A ISO 12213-2 usa composição molar; a ISO 12213-3 usa
+propriedades físicas como poder calorífico, densidade relativa e CO₂,
+além de pressão e temperatura.
 
-9. COMPARAÇÃO BOMBA × MODELO
-----------------------------
-Diferença = Volume indicado pela bomba - Volume teórico
+AGA8 e GERG são modelos utilizados para propriedades de gás natural. O
+NIST descreve AGA8 e GERG entre as equações de estado usadas em aplicações
+de medição e propriedades termodinâmicas de gás natural.
 
-Diferença percentual = Diferença / Volume teórico × 100
+Portanto, a evolução científica do programa deve ser:
+1) obter composição do GNV;
+2) calcular Z(P,T,composição), em vez de usar Z fixo;
+3) considerar a temperatura real do gás durante o abastecimento;
+4) conhecer as condições efetivamente usadas pelo medidor;
+5) trabalhar com incerteza de medição.
 
-Essa comparação é uma ferramenta de investigação física. Ela não
-constitui, isoladamente, prova metrológica de fraude. Para uma análise
-mais rigorosa são necessários temperatura real do gás, composição, Z
-validado, condições de referência do medidor e dados metrológicos.
+PARTE D — TEMPERATURA DURANTE O ABASTECIMENTO
+==============================================
 
-FONTE ANP
----------
+Durante o enchimento existe entrada de massa e transferência de calor.
+A aba Compressão / Temperatura usa uma compressão adiabática reversível
+somente como cenário didático:
+
+T₂/T₁ = (P₂/P₁)^((k−1)/k)
+P·V^k = constante
+V₂/V₁ = (P₁/P₂)^(1/k)
+
+O abastecimento real é um sistema aberto, com troca de calor entre gás,
+parede do cilindro, mangueira e ambiente. A temperatura calculada nessa
+aba NÃO é uma medição da temperatura real do GNV.
+
+PARTE E — COMPARAÇÃO COM A BOMBA
+================================
+
+Diferença = volume indicado pela bomba − volume calculado
+Diferença percentual = diferença / volume calculado × 100
+
+Uma diferença grande é um indício para investigação. Ela não constitui,
+sozinha, prova metrológica de fraude. Uma conclusão técnica exige dados
+do medidor, condições de referência, temperatura real do gás,
+composição/Z, calibração e incerteza de medição.
+
+FONTES E FUNDAMENTAÇÃO
+=======================
+
+ANP — Publicidade dos preços de gás natural:
 https://www.gov.br/anp/pt-br/assuntos/movimentacao-estocagem-e-comercializacao-de-gas-natural/acompanhamento-do-mercado-de-gas-natural/publicidade-dos-precos-de-gas-natural
+
+ANP — Glossário C / Condição Padrão de Medição:
 https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
+
+ISO 12213-2:2006 — cálculo do fator de compressibilidade por composição:
+https://www.iso.org/standard/44411.html
+
+ISO 12213-3:2006 — cálculo do fator de compressibilidade por propriedades:
+https://www.iso.org/standard/44412.html
+
+NIST — REFPROP / propriedades de misturas e AGA8:
+https://www.nist.gov/srd/refprop
+
+NIST — comparação de equações de estado para medição de gás natural:
+https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-used-flow-and-energy-measurement
 """
         self.texto_formulas.insert(
             tk.END,
@@ -6629,19 +6665,172 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 # ABA ANP - CONDIÇÃO DE REFERÊNCIA
 # =============================================================================
 
-        frame_anp=ttk.Frame(self.aba_anp,padding=12); frame_anp.pack(fill="both",expand=True)
-        ttk.Label(frame_anp,text="Cálculo pela condição de referência da ANP",font=("Arial",15,"bold")).pack(anchor="w",pady=(0,6))
-        texto_anp=tk.Text(frame_anp,wrap="word",font=("Consolas",10)); texto_anp.pack(fill="both",expand=True)
+        frame_anp = ttk.Frame(self.aba_anp, padding=12)
+        frame_anp.pack(fill="both", expand=True)
+
+        ttk.Label(
+            frame_anp,
+            text="Cálculo pela condição de referência da ANP",
+            font=("Arial", 15, "bold")
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 4))
+
+        ttk.Label(
+            frame_anp,
+            text=(
+                "A ANP define a condição de referência do gás natural. "
+                "Os campos abaixo permitem aplicar uma estimativa física "
+                "de conversão para essa condição. Este cálculo não reproduz "
+                "o algoritmo interno do dispenser."
+            ),
+            wraplength=1100,
+            justify="left"
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 8))
+
+        anp_campos = [
+            ("Capacidade do cilindro (L)", "anp_capacidade", "26"),
+            ("Pressão inicial manométrica (bar)", "anp_pi", "0"),
+            ("Pressão final manométrica (bar)", "anp_pf", "220"),
+            ("Temperatura ambiente (°C)", "anp_temp", "20"),
+            ("Altitude (m)", "anp_alt", "0"),
+            ("Volume indicado pela bomba (m³) — opcional", "anp_bomba", ""),
+        ]
+        for i, (rotulo, attr, valor) in enumerate(anp_campos):
+            r = 2 + i // 2
+            c = (i % 2) * 2
+            ttk.Label(frame_anp, text=rotulo).grid(row=r, column=c, sticky="w", padx=(0, 5), pady=4)
+            e = ttk.Entry(frame_anp, width=18)
+            e.grid(row=r, column=c + 1, sticky="w", padx=(0, 18), pady=4)
+            if valor:
+                e.insert(0, valor)
+            setattr(self, attr, e)
+
+        frame_anp_botoes = ttk.Frame(frame_anp)
+        frame_anp_botoes.grid(row=5, column=0, columnspan=4, sticky="ew", pady=8)
+
+        texto_anp = tk.Text(frame_anp, wrap="word", font=("Consolas", 10), height=24)
+        scroll_anp = ttk.Scrollbar(frame_anp, orient="vertical", command=texto_anp.yview)
+        texto_anp.configure(yscrollcommand=scroll_anp.set)
+        texto_anp.grid(row=6, column=0, columnspan=3, sticky="nsew", padx=(0, 5))
+        scroll_anp.grid(row=6, column=3, sticky="ns")
+        frame_anp.grid_columnconfigure(2, weight=1)
+        frame_anp.grid_rowconfigure(6, weight=1)
+
+        def copiar_dados_abastecimento_para_anp():
+            pares = [
+                (self.anp_capacidade, self.entry_capacidade_cilindro),
+                (self.anp_pi, self.entry_pressao_inicial),
+                (self.anp_pf, self.entry_pressao_final),
+                (self.anp_temp, self.entry_temp_abastecimento),
+                (self.anp_alt, self.entry_altitude_abastecimento),
+                (self.anp_bomba, self.entry_volume_abastecido),
+            ]
+            for destino, origem in pares:
+                destino.delete(0, tk.END)
+                destino.insert(0, origem.get())
+
         def atualizar_calculo_anp_tela():
             try:
-                c=converter_numero(self.entry_capacidade_cilindro.get()); pi=converter_numero(self.entry_pressao_inicial.get()); pf=converter_numero(self.entry_pressao_final.get()); temp=converter_numero(self.entry_temp_abastecimento.get()); alt=converter_numero(self.entry_altitude_abastecimento.get()); bomba=converter_numero(self.entry_volume_abastecido.get() or "0")
-                v=calcular_volume_anp_referencia(c,pi,pf,temp,alt); patm=calcular_pressao_atmosferica(alt); pia=pi+patm; pfa=pf+patm; dif=bomba-v; pct=(dif/v*100) if v else 0
-                texto_anp.delete("1.0","end"); texto_anp.insert(tk.END,"CÁLCULO EXCLUSIVO PELA CONDIÇÃO DE REFERÊNCIA DA ANP\n"+"="*60+"\n\n"+f"Volume físico do cilindro : {formatar_numero_br(c/1000,6)} m³\n"+f"Pressão inicial            : {formatar_numero_br(pi,4)} bar\n"+f"Pressão final              : {formatar_numero_br(pf,4)} bar\n"+f"Pressão atmosférica        : {formatar_numero_br(patm,5)} bar\n"+f"Pressão inicial absoluta   : {formatar_numero_br(pia,5)} bar\n"+f"Pressão final absoluta     : {formatar_numero_br(pfa,5)} bar\n"+f"Temperatura ambiente       : {formatar_numero_br(temp,2)} °C\n\n"+"REFERÊNCIA ANP\nTref = 20 °C = 293,15 K\nPref = 1,033 kgf/cm² ≈ 1,01325 bar\n\n"+"FÓRMULA APLICADA NESTA ABA\nVref = Vcil × (Pfinal_abs − Pinicial_abs) / Pref × Tref / T\n\n"+f"VOLUME EQUIVALENTE ANP    : {formatar_numero_br(v,5)} m³\n"+f"VOLUME EQUIVALENTE ANP    : {formatar_numero_br(v*1000,2)} L equivalentes\n"+f"VOLUME INDICADO PELA BOMBA: {formatar_numero_br(bomba,5)} m³\n"+f"DIFERENÇA BOMBA − ANP     : {formatar_numero_br(dif,5)} m³\n"+f"DIFERENÇA PERCENTUAL      : {formatar_numero_br(pct,2)} %\n\n"+"Nesta aba NÃO é usado o Z da aba Cálculos, massa molar ou modelo de gás real.\n"+"A temperatura disponível é a ambiente, não a temperatura real medida do GNV.\n"+"A ANP define a condição de referência; este cálculo não reproduz o algoritmo ou sensor do dispenser.")
-            except (ValueError,ZeroDivisionError) as e: messagebox.showerror("Cálculo ANP",str(e))
-        ttk.Button(frame_anp,text="Calcular exclusivamente pela referência ANP",command=atualizar_calculo_anp_tela).pack(anchor="w",pady=6)
-        texto_anp.insert(tk.END,"Clique no botão para calcular somente pelo modelo de referência ANP.\n")
+                c = converter_numero(self.anp_capacidade.get())
+                pi = converter_numero(self.anp_pi.get())
+                pf = converter_numero(self.anp_pf.get())
+                temp = converter_numero(self.anp_temp.get())
+                alt = converter_numero(self.anp_alt.get())
+                bomba_texto = self.anp_bomba.get().strip()
+                bomba = converter_numero(bomba_texto) if bomba_texto else None
 
-# =============================================================================
+                if c <= 0:
+                    raise ValueError("A capacidade do cilindro deve ser maior que zero.")
+                if pi < 0 or pf < 0:
+                    raise ValueError("As pressões devem ser maiores ou iguais a zero.")
+                if pf < pi:
+                    raise ValueError("A pressão final deve ser maior ou igual à pressão inicial.")
+                if temp <= -273.15:
+                    raise ValueError("A temperatura deve ser maior que -273,15 °C.")
+
+                v = calcular_volume_anp_referencia(c, pi, pf, temp, alt)
+                patm = calcular_pressao_atmosferica(alt)
+                pia = pi + patm
+                pfa = pf + patm
+
+                linhas = [
+                    "CÁLCULO PELA CONDIÇÃO DE REFERÊNCIA DA ANP",
+                    "=" * 62,
+                    "",
+                    "DADOS INFORMADOS",
+                    f"Capacidade física do cilindro : {formatar_numero_br(c, 2)} L",
+                    f"Pressão inicial manométrica   : {formatar_numero_br(pi, 4)} bar",
+                    f"Pressão final manométrica     : {formatar_numero_br(pf, 4)} bar",
+                    f"Pressão atmosférica estimada  : {formatar_numero_br(patm, 5)} bar",
+                    f"Pressão inicial absoluta      : {formatar_numero_br(pia, 5)} bar",
+                    f"Pressão final absoluta        : {formatar_numero_br(pfa, 5)} bar",
+                    f"Temperatura ambiente          : {formatar_numero_br(temp, 2)} °C",
+                    f"Altitude                      : {formatar_numero_br(alt, 1)} m",
+                    "",
+                    "CONDIÇÃO DE REFERÊNCIA ANP",
+                    "Tref = 20 °C = 293,15 K",
+                    "Pref = 1,033 kgf/cm² (aprox. 1,01325 bar)",
+                    "",
+                    "ESTIMATIVA FÍSICA PARA CONVERSÃO",
+                    "Vref = Vcil × (Pfinal_abs − Pinicial_abs) / Pref × Tref / T",
+                    "",
+                    f"VOLUME EQUIVALENTE NA REFERÊNCIA ANP : {formatar_numero_br(v, 5)} m³",
+                    f"VOLUME EQUIVALENTE NA REFERÊNCIA ANP : {formatar_numero_br(v * 1000.0, 2)} L equivalentes",
+                    "",
+                    "INTERPRETAÇÃO",
+                    "O valor acima NÃO é a capacidade física do cilindro.",
+                    "É o volume equivalente da quantidade calculada na condição",
+                    "de referência de 20 °C e aproximadamente 1,01325 bar.",
+                    "",
+                    "IMPORTANTE",
+                    "A ANP estabelece a condição de referência, mas esta fórmula",
+                    "não deve ser apresentada como o algoritmo do dispenser.",
+                    "Para uma análise metrológica são necessários os dados e",
+                    "condições efetivamente utilizados pelo sistema de medição.",
+                ]
+
+                if bomba is not None:
+                    diferenca = bomba - v
+                    pct = (diferenca / v * 100.0) if v > 0 else 0.0
+                    linhas += [
+                        "",
+                        "COMPARAÇÃO OPCIONAL COM A BOMBA",
+                        f"Volume indicado pela bomba       : {formatar_numero_br(bomba, 5)} m³",
+                        f"Diferença bomba − referência    : {formatar_numero_br(diferenca, 5)} m³",
+                        f"Diferença percentual             : {formatar_numero_br(pct, 2)} %",
+                    ]
+
+                linhas += [
+                    "",
+                    "FUNDAMENTAÇÃO",
+                    "A ANP informa 20 °C e 1,033 kgf/cm² como condição de referência",
+                    "para volumes médios comercializados de gás natural.",
+                    "Consulte a aba Fórmulas e Física para as fontes oficiais.",
+                ]
+
+                texto_anp.delete("1.0", "end")
+                texto_anp.insert(tk.END, "\n".join(linhas))
+                texto_anp.see("1.0")
+
+            except (ValueError, ZeroDivisionError) as e:
+                messagebox.showerror("Cálculo ANP", str(e))
+
+        ttk.Button(
+            frame_anp_botoes,
+            text="Calcular exclusivamente pela condição de referência ANP",
+            command=atualizar_calculo_anp_tela
+        ).pack(side="left", padx=(0, 8))
+        ttk.Button(
+            frame_anp_botoes,
+            text="Copiar dados da aba Abastecimentos",
+            command=copiar_dados_abastecimento_para_anp
+        ).pack(side="left")
+
+        texto_anp.insert(
+            tk.END,
+            "Preencha os campos acima ou use 'Copiar dados da aba Abastecimentos'.\n"
+            "O volume da bomba é opcional e só é usado para comparação."
+        )
+
 # ABA COMPRESSÃO / TEMPERATURA
 # =============================================================================
 
@@ -8166,11 +8355,13 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
         self.texto_resultados.insert(
             tk.END,
             f"Volume equivalente na temperatura informada: {formatar_numero_br(resultado['volume_equivalente_m3_temperatura_informada'], 3)} m³\n"
+            "(mesmos mols expressos à temperatura ambiente informada)\n"
         )
 
         self.texto_resultados.insert(
             tk.END,
             f"Volume equivalente na referência ANP (20 °C): {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
+            "(mesmos mols expressos a 20 °C e 1,01325 bar)\n"
         )
 
         self.texto_resultados.insert(
@@ -8200,9 +8391,9 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 
         resultados_formatados = [
 
-            ("Volume físico do cilindro", resultado["volume_cilindro_l"], "L", 2),
+            ("Capacidade física do cilindro", resultado["volume_cilindro_l"], "L", 2),
 
-            ("Volume físico do cilindro", resultado["volume_cilindro_m3"], "m³", 6),
+            ("Capacidade física do cilindro", resultado["volume_cilindro_m3"], "m³", 6),
 
             ("Temperatura", resultado["temperatura_c"], "°C", 2),
 
@@ -8228,9 +8419,9 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 
             ("Volume específico", resultado["volume_especifico"], "m³/kg", 9),
 
-            ("Volume físico ocupado", resultado["volume_real"], "m³", 6),
+            ("Volume físico ocupado pelo modelo", resultado["volume_real"], "m³", 6),
 
-            ("Volume equivalente na temperatura informada", resultado["volume_equivalente_m3_temperatura_informada"], "m³", 3),
+            ("Volume equivalente a T ambiente informada", resultado["volume_equivalente_m3_temperatura_informada"], "m³", 3),
 
             ("Volume equivalente na referência ANP (20 °C)", resultado["volume_equivalente_m3_20c"], "m³", 3),
 
@@ -9154,7 +9345,7 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 # =============================================================================
 
         # -------------------------------------------------------------
-        # COMPARAÇÃO FÍSICA DOS ABASTECIMENTOS
+        # COMPARAÇÃO DOS ABASTECIMENTOS
         # -------------------------------------------------------------
         volumes_bomba = []
         volumes_teoricos = []
@@ -9213,7 +9404,7 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
 
         self.texto_estatisticas.insert(
             tk.END,
-            "\n\nCOMPARAÇÃO FÍSICA DOS ABASTECIMENTOS\n"
+            "\n\nCOMPARAÇÃO DOS ABASTECIMENTOS\n"
             "----------------------------------------\n"
         )
 
@@ -11111,7 +11302,7 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
             self.texto_comparacao_abastecimento.insert(
                 tk.END,
                 "=" * 62 + "\n"
-                "COMPARAÇÃO FÍSICA DO ABASTECIMENTO\n"
+                "ANÁLISE FÍSICA DO ABASTECIMENTO\n"
                 "=" * 62 + "\n\n"
                 f"Capacidade do cilindro : {formatar_numero_br(abastecimento.capacidade_cilindro_l, 2)} L\n"
                 f"Pressão inicial        : {formatar_numero_br(abastecimento.pressao_inicial, 2)} bar\n"
@@ -11128,10 +11319,11 @@ https://www.gov.br/anp/pt-br/acesso-a-informacao/glossario/c
                 f"Mols adicionados pelo modelo             : {formatar_numero_br(comparacao['mols_adicionados'], 3)} mol\n"
                 f"Massa adicionada pelo modelo             : {formatar_numero_br(comparacao['massa_adicionada_kg'], 4)} kg\n\n"
                 "REFERÊNCIAS E HIPÓTESES\n"
-                "ANP: 20 °C / aproximadamente 1,033 kgf/cm².\n"
-                "Cálculo interno: 20 °C / 1,01325 bar.\n"
+                "ANP: condição de referência de 20 °C / 1,033 kgf/cm².\n"
+                "O cálculo ANP é uma conversão para essa condição; não reproduz o algoritmo do dispenser.\n"
                 "Modelo científico: PV = Z n R T, usando Z informado.\n"
-                "Temperatura disponível: ambiente; não é a temperatura real medida do gás.\n\n"
+                "Temperatura disponível: AMBIENTE; não é a temperatura real medida do gás.\n"
+                "O modelo científico usa a temperatura ambiente como aproximação para o gás.\n\n"
                 "ATENÇÃO: esta comparação é um modelo físico. Para uma\n"
                 "conclusão metrológica sobre fraude são necessários também\n"
                 "dados de temperatura real do gás, composição/Z validado,\n"
@@ -13450,14 +13642,11 @@ if __name__ == "__main__":
 # - usa temperatura ambiente no abastecimento como aproximação da temperatura do gás
 # - compara densidade informada e densidade calculada
 # - registra massa específica nos abastecimentos
-# - adiciona aba ANP com condição de referência oficial documentada
+# - adiciona aba ANP com campos próprios e condição de referência oficial documentada
 # - separa cálculo de referência ANP de modelo científico com gás real
-# - elimina repetição do relatório de comparação física nas estatísticas
+# - elimina repetição do relatório de análise física nas estatísticas
 # - grava metragem cúbica teórica no SQLite
 # - adiciona metragem cúbica teórica na visualização do SQLite
-
-
-
 
 
 
