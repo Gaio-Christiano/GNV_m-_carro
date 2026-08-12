@@ -112,6 +112,17 @@ DENSIDADE_GNV = None           # kg/m³
 #
 Z = None
 
+# Idiomas disponíveis na interface.
+IDIOMAS_DISPONIVEIS = ("pt-BR", "English", "Español", "Français", "Italiano", "Deutsch")
+IDIOMA_TABS = {
+    "pt-BR": ["Cálculos", "Abastecimentos", "Histórico", "Banco SQLite", "Excel", "Gráficos", "Configurações", "Estatísticas", "ANP", "Fórmulas e Física"],
+    "English": ["Calculations", "Refuelings", "History", "SQLite Database", "Excel", "Charts", "Settings", "Statistics", "ANP", "Formulas & Physics"],
+    "Español": ["Cálculos", "Abastecimientos", "Historial", "Base SQLite", "Excel", "Gráficos", "Configuración", "Estadísticas", "ANP", "Fórmulas y Física"],
+    "Français": ["Calculs", "Ravitaillements", "Historique", "Base SQLite", "Excel", "Graphiques", "Configuration", "Statistiques", "ANP", "Formules et Physique"],
+    "Italiano": ["Calcoli", "Rifornimenti", "Storico", "Database SQLite", "Excel", "Grafici", "Impostazioni", "Statistiche", "ANP", "Formule e Fisica"],
+    "Deutsch": ["Berechnungen", "Tankvorgänge", "Verlauf", "SQLite-Datenbank", "Excel", "Diagramme", "Einstellungen", "Statistiken", "ANP", "Formeln & Physik"],
+}
+
 # =============================================================================
 # PARTE 02A - CONDIÇÕES DE REFERÊNCIA DA ANP
 # =============================================================================
@@ -6186,17 +6197,23 @@ class InterfaceGNV:
             text="Gráficos de abastecimentos",
             font=("Arial", 14, "bold")
         ).pack(pady=10)
-        ttk.Button(
-            self.frame_graficos,
-            text="Atualizar Gráfico por Posto",
-            command=self.atualizar_grafico
-        ).pack(pady=5)
-        self.canvas_grafico = tk.Canvas(
-            self.frame_graficos,
-            background="white",
-            height=400
+        frame_controles_graficos = ttk.Frame(self.frame_graficos)
+        frame_controles_graficos.pack(fill="x", pady=(0, 8))
+        ttk.Label(frame_controles_graficos, text="Tipo de gráfico:").pack(side="left", padx=(0, 6))
+        self.tipo_grafico = tk.StringVar(value="Gasto por posto")
+        self.combo_tipo_grafico = ttk.Combobox(
+            frame_controles_graficos,
+            textvariable=self.tipo_grafico,
+            values=("Gasto por posto", "Volume por posto", "Abastecimentos por posto", "Evolução do volume"),
+            state="readonly", width=28
         )
+        self.combo_tipo_grafico.pack(side="left", padx=5)
+        self.combo_tipo_grafico.bind("<<ComboboxSelected>>", lambda _event: self.atualizar_grafico())
+        ttk.Button(frame_controles_graficos, text="Atualizar Gráfico", command=self.atualizar_grafico).pack(side="left", padx=5)
+        ttk.Button(frame_controles_graficos, text="Limpar", command=lambda: self.canvas_grafico.delete("all")).pack(side="left", padx=5)
+        self.canvas_grafico = tk.Canvas(self.frame_graficos, background="white", height=460, highlightthickness=1)
         self.canvas_grafico.pack(fill="both", expand=True, padx=10, pady=10)
+        self.canvas_grafico.bind("<Configure>", lambda _event: self.atualizar_grafico())
 
 # =============================================================================
 # ABA CONFIGURAÇÕES
@@ -6223,7 +6240,7 @@ class InterfaceGNV:
         ttk.Label(self.frame_configuracoes, text="Idioma:").pack(anchor="w", padx=10, pady=5)
         ttk.Combobox(
             self.frame_configuracoes, textvariable=self.config_idioma,
-            values=("pt-BR",), state="readonly", width=20
+            values=IDIOMAS_DISPONIVEIS, state="readonly", width=20
         ).pack(anchor="w", padx=10)
         ttk.Checkbutton(
             self.frame_configuracoes, text="Backup automático",
@@ -6484,6 +6501,18 @@ https://ocw.mit.edu/courses/3-20-materials-at-equilibrium-sma-5111-fall-2003/
 
 Purdue University — Thermodynamics, Fluid Mechanics and Gas Dynamics: gás ideal e fator de compressibilidade Z:
 https://engineering.purdue.edu/~wassgren/teaching/ME20000/NotesAndReading/Lec11_Reading_Wassgren.pdf
+
+Stanford University — Thermodynamics / Ideal Gas Law:
+https://web.stanford.edu/~peastman/statmech/thermodynamics.html
+
+Stanford University — Fundamentals of Compressible Flow, gases ideais e propriedades termodinâmicas:
+https://web.stanford.edu/~cantwell/AA210A_Course_Material/AA210A_Lectures/AA210A_Chapter_2_Thermo_of_gases_Brian_J_Cantwell.pdf
+
+ITA — Departamento de Ciência e Tecnologia Aeroespacial: catálogo de graduação e disciplinas de Termodinâmica/Termodinâmica Aplicada:
+https://www.ita.br/sites/default/files/pages/collection/Cat%C3%A1logo%20dos%20Cursos%20de%20Gradua%C3%A7%C3%A3o%202026%20-%20digital%20Rev.26.02.24.pdf
+
+IME-USP — pesquisas acadêmicas envolvendo termodinâmica e sistemas de muitos corpos:
+https://lattes.ime.usp.br/posmap/membro-1498618533380124.html
 
 NIST — REFPROP / propriedades de misturas e AGA8:
 https://www.nist.gov/srd/refprop
@@ -7714,48 +7743,91 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
         self.atualizar_excel()
 
     def atualizar_grafico(self):
+        """Desenha gráficos legíveis e responsivos sem depender do matplotlib."""
         self.canvas_grafico.delete("all")
         registros = self.banco.listar_abastecimentos()
+        largura = max(self.canvas_grafico.winfo_width(), 760)
+        altura = max(self.canvas_grafico.winfo_height(), 460)
         if not registros:
-            self.canvas_grafico.create_text(
-                300, 180, text="Nenhum abastecimento cadastrado.", font=("Arial", 12)
-            )
+            self.canvas_grafico.create_text(largura/2, altura/2, text="Nenhum abastecimento cadastrado.", font=("Arial",13,"bold"), fill="#555555")
             return
-        totais = {}
-        for registro in registros:
-            posto = str(registro[2] or "Sem posto")
-            totais[posto] = totais.get(posto, 0.0) + float(registro[7] or 0)
-        largura = max(self.canvas_grafico.winfo_width(), 600)
-        altura = max(self.canvas_grafico.winfo_height(), 400)
-        maior = max(totais.values()) or 1.0
-        margem_esq = 70
-        area_altura = altura - 80
-        area_largura = largura - margem_esq - 30
-        passo = area_largura / max(len(totais), 1)
-        self.canvas_grafico.create_line(margem_esq, area_altura, largura - 20, area_altura)
-        self.canvas_grafico.create_line(margem_esq, 20, margem_esq, area_altura)
-        for indice, (posto, valor) in enumerate(sorted(totais.items())):
-            x1 = margem_esq + indice * passo + passo * 0.2
-            x2 = margem_esq + indice * passo + passo * 0.8
-            altura_barra = (valor / maior) * (area_altura - 30)
-            y1 = area_altura - altura_barra
-            self.canvas_grafico.create_rectangle(x1, y1, x2, area_altura, outline="black")
-            self.canvas_grafico.create_text((x1+x2)/2, y1-10, text=f"R$ {valor:.2f}")
-            self.canvas_grafico.create_text((x1+x2)/2, area_altura+20, text=posto[:18])
-        self.canvas_grafico.create_text(
-            largura/2, 10, text="Gasto total por posto", font=("Arial", 12, "bold")
-        )
+        tipo = self.tipo_grafico.get() if hasattr(self, "tipo_grafico") else "Gasto por posto"
+        margem_esq, margem_dir, margem_top, margem_base = 90,35,55,75
+        x0,y0=margem_esq,altura-margem_base; x1,y1=largura-margem_dir,margem_top
+        def numero(v,c=2): return formatar_numero_br(float(v),c)
+        def eixos(titulo,unidade):
+            self.canvas_grafico.create_text(largura/2,22,text=titulo,font=("Arial",14,"bold"),fill="#222222")
+            self.canvas_grafico.create_line(x0,y0,x1,y0,fill="#333333",width=2); self.canvas_grafico.create_line(x0,y0,x0,y1,fill="#333333",width=2)
+            self.canvas_grafico.create_text(x0,y1-18,text=unidade,anchor="w",font=("Arial",9),fill="#555555")
+        def barras(dados,titulo,unidade,fmt):
+            eixos(titulo,unidade)
+            if not dados:return
+            maximo=max(v for _,v in dados) or 1.0; aw=x1-x0; ah=y0-y1; passo=aw/len(dados)
+            for i in range(6):
+                valor=maximo*i/5; y=y0-ah*i/5
+                self.canvas_grafico.create_line(x0,y,x1,y,fill="#e5e5e5")
+                self.canvas_grafico.create_text(x0-8,y,text=fmt(valor),anchor="e",font=("Arial",8),fill="#555555")
+            for i,(nome,valor) in enumerate(dados):
+                cx=x0+passo*(i+0.5); bw=min(70,passo*.62); h=ah*valor/maximo
+                self.canvas_grafico.create_rectangle(cx-bw/2,y0-h,cx+bw/2,y0,fill="#5b8ff9",outline="#2f5fb3")
+                self.canvas_grafico.create_text(cx,y0-h-10,text=fmt(valor),font=("Arial",9,"bold"),fill="#222222")
+                self.canvas_grafico.create_text(cx,y0+12,text=str(nome)[:18],font=("Arial",8),anchor="n")
+        if tipo=="Gasto por posto":
+            totais={}
+            for r in registros:
+                posto=str(r[2] or "Sem posto"); totais[posto]=totais.get(posto,0.0)+float(r[7] or 0.0)*float(r[8] or 0.0)
+            barras(sorted(totais.items(),key=lambda x:x[1],reverse=True)[:12],"Gasto total por posto","R$",lambda v:"R$ "+numero(v,0))
+        elif tipo=="Volume por posto":
+            totais={}
+            for r in registros:
+                posto=str(r[2] or "Sem posto"); totais[posto]=totais.get(posto,0.0)+float(r[7] or 0.0)
+            barras(sorted(totais.items(),key=lambda x:x[1],reverse=True)[:12],"Volume abastecido por posto","m³",lambda v:numero(v,2)+" m³")
+        elif tipo=="Abastecimentos por posto":
+            contagem={}
+            for r in registros:
+                posto=str(r[2] or "Sem posto"); contagem[posto]=contagem.get(posto,0)+1
+            barras(sorted(contagem.items(),key=lambda x:x[1],reverse=True)[:12],"Quantidade de abastecimentos por posto","registros",lambda v:numero(v,0))
+        else:
+            pontos=[]
+            for r in registros:
+                try:pontos.append((str(r[1] or ""),float(r[7] or 0.0)))
+                except (TypeError,ValueError):pass
+            pontos=sorted(pontos,key=lambda x:x[0])[-30:]; eixos("Evolução dos últimos abastecimentos","m³")
+            if not pontos:return
+            maximo=max(v for _,v in pontos) or 1.0; aw,ah=x1-x0,y0-y1
+            for i in range(6):
+                valor=maximo*i/5;y=y0-ah*i/5;self.canvas_grafico.create_line(x0,y,x1,y,fill="#e5e5e5");self.canvas_grafico.create_text(x0-8,y,text=numero(valor,1),anchor="e",font=("Arial",8),fill="#555555")
+            coords=[]
+            for i,(data,valor) in enumerate(pontos):
+                x=x0 if len(pontos)==1 else x0+aw*i/(len(pontos)-1); y=y0-ah*valor/maximo; coords.append((x,y))
+            for a,b in zip(coords,coords[1:]):self.canvas_grafico.create_line(a[0],a[1],b[0],b[1],fill="#d95f02",width=3)
+            for i,((data,valor),(x,y)) in enumerate(zip(pontos,coords)):
+                self.canvas_grafico.create_oval(x-4,y-4,x+4,y+4,fill="#d95f02",outline="#8c3d00")
+                if i==0 or i==len(coords)-1 or len(coords)<=8:
+                    self.canvas_grafico.create_text(x,y+12,text=data[:10],anchor="n",font=("Arial",8));self.canvas_grafico.create_text(x,y-12,text=numero(valor,2),anchor="s",font=("Arial",8,"bold"))
+
+    def aplicar_idioma(self):
+        """Atualiza nomes das abas e título principal conforme o idioma selecionado."""
+        idioma=self.config_idioma.get() if hasattr(self,"config_idioma") else "pt-BR"
+        nomes=IDIOMA_TABS.get(idioma,IDIOMA_TABS["pt-BR"])
+        try:
+            for idx,nome in enumerate(nomes):self.notebook.tab(idx,text=nome)
+            titulos={"pt-BR":"Sistema de Cálculo de GNV","English":"CNG Calculation System","Español":"Sistema de Cálculo de GNV","Français":"Système de calcul GNV","Italiano":"Sistema di calcolo GNV","Deutsch":"GNV-Berechnungssystem"}
+            self.janela.title(titulos.get(idioma,titulos["pt-BR"]))
+        except Exception:pass
 
     def salvar_configuracoes_tela(self):
         self.definir_configuracao("tema", self.config_tema.get())
         self.definir_configuracao("idioma", self.config_idioma.get())
         self.definir_configuracao("backup_automatico", bool(self.config_backup.get()))
+        self.aplicar_idioma()
         messagebox.showinfo("Configurações", "Configurações salvas com sucesso.")
 
     def atualizar_configuracoes_tela(self):
         self.config_tema.set(self.ler_configuracao("tema", "claro"))
         self.config_idioma.set(self.ler_configuracao("idioma", "pt-BR"))
         self.config_backup.set(bool(self.ler_configuracao("backup_automatico", True)))
+        self.aplicar_idioma()
 
     def atualizar_interface(self):
 
@@ -8390,6 +8462,9 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
             tk.END,
             f"Volume TOTAL equivalente a 1,01325 bar na T informada: {formatar_numero_br(resultado['volume_equivalente_m3_temperatura_informada'], 3)} m³\n"
             "(quantidade TOTAL presente no cilindro, calculada com Z informado)\n"
+            "Observação física: mantendo pressão final, volume do cilindro e Z constantes,\n"
+            "a temperatura usada para calcular os mols e a mesma temperatura usada na\n"
+            "reconversão se cancelam; por isso este valor pode permanecer praticamente constante.\n"
         )
 
         self.texto_resultados.insert(
@@ -11340,8 +11415,8 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
             self.texto_comparacao_abastecimento.delete("1.0", "end")
             self.texto_comparacao_abastecimento.insert(
                 tk.END,
-                "ANÁLISE FÍSICA DO ABASTECIMENTO\n"
-                "----------------------------------------\n\n"
+                "ANÁLISE DO ABASTECIMENTO — COMPARAÇÃO DOS MODELOS\n"
+                "==================================================\n\n"
                 f"Capacidade do cilindro : {formatar_numero_br(abastecimento.capacidade_cilindro_l, 2)} L\n"
                 f"Pressão inicial        : {formatar_numero_br(abastecimento.pressao_inicial, 2)} bar\n"
                 f"Pressão final          : {formatar_numero_br(abastecimento.pressao_final, 2)} bar\n"
@@ -13696,8 +13771,6 @@ if __name__ == "__main__":
 # - elimina repetição do relatório de análise física nas estatísticas
 # - grava metragem cúbica teórica no SQLite
 # - adiciona metragem cúbica teórica na visualização do SQLite
-
-
 
 
 
