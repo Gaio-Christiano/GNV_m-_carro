@@ -1,12 +1,12 @@
 # =============================================================================
-# ARQUIVO.....: GNV14_REPARADO_V15.py
+# ARQUIVO.....: GNV14_REPARADO_V17.py
 # AUTOR.......: Christiano Gaio
 # OBJETIVO....: Calculadora de GNV
 #
 # DESCRIÇÃO
 # ----------
-# Este programa calcula aproximadamente a quantidade de GNV armazenada em um
-# cilindro utilizando a Lei dos Gases Ideais.
+# Este programa estima a quantidade de GNV em um cilindro usando um modelo
+# de gás real simplificado, PV = Z n R T, com Z informado pelo usuário.
 #
 # OBSERVAÇÃO IMPORTANTE
 # ---------------------
@@ -14,13 +14,9 @@
 # Portanto, em pressões elevadas (200 a 220 bar) existe um erro quando usamos
 # apenas a Lei dos Gases Ideais.
 #
-# Futuramente será possível implementar:
-#
-#   • Fator de Compressibilidade (Z)
-#   • Norma AGA8
-#   • GERG-2008
-#
-# Entretanto, para estudo da física e programação este programa é excelente.
+# Limitação importante: Z é fornecido como aproximação. Para maior precisão em
+# alta pressão, é necessário calcular Z(P,T,composição) por um modelo validado,
+# como AGA8/GERG, e conhecer a temperatura real do gás durante o abastecimento.
 #
 # Todo o código possui comentários para facilitar o aprendizado.
 # =============================================================================
@@ -115,12 +111,43 @@ Z = None
 # Idiomas disponíveis na interface.
 IDIOMAS_DISPONIVEIS = ("pt-BR", "English", "Español", "Français", "Italiano", "Deutsch")
 IDIOMA_TABS = {
-    "pt-BR": ["Cálculos", "Abastecimentos", "Histórico", "Banco SQLite", "Excel", "Gráficos", "Configurações", "Estatísticas", "ANP", "Fórmulas e Física"],
-    "English": ["Calculations", "Refuelings", "History", "SQLite Database", "Excel", "Charts", "Settings", "Statistics", "ANP", "Formulas & Physics"],
-    "Español": ["Cálculos", "Abastecimientos", "Historial", "Base SQLite", "Excel", "Gráficos", "Configuración", "Estadísticas", "ANP", "Fórmulas y Física"],
-    "Français": ["Calculs", "Ravitaillements", "Historique", "Base SQLite", "Excel", "Graphiques", "Configuration", "Statistiques", "ANP", "Formules et Physique"],
-    "Italiano": ["Calcoli", "Rifornimenti", "Storico", "Database SQLite", "Excel", "Grafici", "Impostazioni", "Statistiche", "ANP", "Formule e Fisica"],
-    "Deutsch": ["Berechnungen", "Tankvorgänge", "Verlauf", "SQLite-Datenbank", "Excel", "Diagramme", "Einstellungen", "Statistiken", "ANP", "Formeln & Physik"],
+    # Ordem oficial das 11 abas do sistema.
+    "pt-BR": [
+        "Cálculos", "Abastecimentos", "ANP", "Aquecimento / Compressão",
+        "Histórico de Abastecimentos", "Banco SQLite", "Exportação / Excel",
+        "Gráficos de Abastecimento", "Configurações do Sistema",
+        "Fórmulas e Física", "Total de Abastecimentos"
+    ],
+    "English": [
+        "Calculations", "Refuelings", "ANP", "Heating / Compression",
+        "Refueling History", "SQLite Database", "Export / Excel",
+        "Refueling Charts", "System Settings", "Formulas & Physics",
+        "Total Refuelings"
+    ],
+    "Español": [
+        "Cálculos", "Abastecimientos", "ANP", "Calentamiento / Compresión",
+        "Historial de Abastecimientos", "Base SQLite", "Exportación / Excel",
+        "Gráficos de Abastecimiento", "Configuración del Sistema",
+        "Fórmulas y Física", "Total de Abastecimientos"
+    ],
+    "Français": [
+        "Calculs", "Ravitaillements", "ANP", "Chauffage / Compression",
+        "Historique des Ravitaillements", "Base SQLite", "Exportation / Excel",
+        "Graphiques de Ravitaillement", "Paramètres du Système",
+        "Formules et Physique", "Total des Ravitaillements"
+    ],
+    "Italiano": [
+        "Calcoli", "Rifornimenti", "ANP", "Riscaldamento / Compressione",
+        "Storico Rifornimenti", "Database SQLite", "Esportazione / Excel",
+        "Grafici dei Rifornimenti", "Impostazioni di Sistema",
+        "Formule e Fisica", "Totale Rifornimenti"
+    ],
+    "Deutsch": [
+        "Berechnungen", "Tankvorgänge", "ANP", "Erwärmung / Kompression",
+        "Tankvorgangsverlauf", "SQLite-Datenbank", "Export / Excel",
+        "Tankdiagramme", "Systemeinstellungen", "Formeln & Physik",
+        "Gesamte Tankvorgänge"
+    ],
 }
 
 # =============================================================================
@@ -5220,7 +5247,7 @@ class InterfaceGNV:
 
             self.aba_compressao,
 
-            text="Compressão / Temperatura"
+            text="Aquecimento / Compressão"
 
         )
 
@@ -5228,7 +5255,7 @@ class InterfaceGNV:
 
             self.aba_historico,
 
-            text="Histórico"
+            text="Histórico de Abastecimentos"
 
         )
 
@@ -5244,7 +5271,7 @@ class InterfaceGNV:
 
             self.aba_excel,
 
-            text="Excel"
+            text="Exportação / Excel"
 
         )
 
@@ -5252,7 +5279,7 @@ class InterfaceGNV:
 
             self.aba_graficos,
 
-            text="Gráficos"
+            text="Gráficos de Abastecimento"
 
         )
 
@@ -5260,7 +5287,7 @@ class InterfaceGNV:
 
             self.aba_configuracoes,
 
-            text="Configurações"
+            text="Configurações do Sistema"
 
         )
 
@@ -6125,6 +6152,7 @@ class InterfaceGNV:
             "Altitude (m)", "Capacidade cilindro (L)",
             "Pressão inicial (bar)", "Pressão final (bar)",
             "Massa específica (kg/m³)",
+            "Metragem teórica (m³)",
             "Metragem ANP (m³)",
             "Metragem científica (m³)"
         )
@@ -6204,7 +6232,7 @@ class InterfaceGNV:
         self.combo_tipo_grafico = ttk.Combobox(
             frame_controles_graficos,
             textvariable=self.tipo_grafico,
-            values=("Gasto por posto", "Volume por posto", "Abastecimentos por posto", "Evolução do volume"),
+            values=("Gasto por posto", "Volume por posto", "Abastecimentos por posto", "Evolução do volume", "Km por m³", "Bomba × teórico"),
             state="readonly", width=28
         )
         self.combo_tipo_grafico.pack(side="left", padx=5)
@@ -6834,7 +6862,8 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
                     "Pref = 1,033 kgf/cm² (aprox. 1,01325 bar)",
                     "",
                     "ESTIMATIVA FÍSICA ANP/IDEALIZADA (Z=1)",
-                    "Vref = Vcil × (Pfinal_abs − Pinicial_abs) / Pref × Tref / T",
+                    "Vadd_ref = Vcil × (Pfinal_abs − Pinicial_abs) / Pref × Tref / Tgas",
+                    "Tgas é a temperatura informada pelo usuário (normalmente ambiente).",
                     "",
                     f"VOLUME ADICIONADO EQUIVALENTE ANP/IDEALIZADO : {formatar_numero_br(v, 5)} m³",
                     f"VOLUME ADICIONADO EQUIVALENTE ANP/IDEALIZADO : {formatar_numero_br(v * 1000.0, 2)} L equivalentes",
@@ -7248,7 +7277,7 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
             self.aba_estatisticas,
 
-            text="Estatísticas"
+            text="Total de Abastecimentos"
 
         )
 
@@ -7743,68 +7772,213 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
         self.atualizar_excel()
 
     def atualizar_grafico(self):
-        """Desenha gráficos legíveis e responsivos sem depender do matplotlib."""
+        """Atualiza gráficos de abastecimento usando os índices reais do SQLite."""
         self.canvas_grafico.delete("all")
         registros = self.banco.listar_abastecimentos()
-        largura = max(self.canvas_grafico.winfo_width(), 760)
-        altura = max(self.canvas_grafico.winfo_height(), 460)
+        largura = max(self.canvas_grafico.winfo_width(), 820)
+        altura = max(self.canvas_grafico.winfo_height(), 500)
+
         if not registros:
-            self.canvas_grafico.create_text(largura/2, altura/2, text="Nenhum abastecimento cadastrado.", font=("Arial",13,"bold"), fill="#555555")
+            self.canvas_grafico.create_text(
+                largura / 2, altura / 2,
+                text="Nenhum abastecimento cadastrado.",
+                font=("Arial", 14, "bold")
+            )
             return
+
         tipo = self.tipo_grafico.get() if hasattr(self, "tipo_grafico") else "Gasto por posto"
-        margem_esq, margem_dir, margem_top, margem_base = 90,35,55,75
-        x0,y0=margem_esq,altura-margem_base; x1,y1=largura-margem_dir,margem_top
-        def numero(v,c=2): return formatar_numero_br(float(v),c)
-        def eixos(titulo,unidade):
-            self.canvas_grafico.create_text(largura/2,22,text=titulo,font=("Arial",14,"bold"),fill="#222222")
-            self.canvas_grafico.create_line(x0,y0,x1,y0,fill="#333333",width=2); self.canvas_grafico.create_line(x0,y0,x0,y1,fill="#333333",width=2)
-            self.canvas_grafico.create_text(x0,y1-18,text=unidade,anchor="w",font=("Arial",9),fill="#555555")
-        def barras(dados,titulo,unidade,fmt):
-            eixos(titulo,unidade)
-            if not dados:return
-            maximo=max(v for _,v in dados) or 1.0; aw=x1-x0; ah=y0-y1; passo=aw/len(dados)
+        margem_esq, margem_dir, margem_top, margem_base = 90, 35, 55, 75
+        x0, y0 = margem_esq, altura - margem_base
+        x1, y1 = largura - margem_dir, margem_top
+
+        def numero(v, casas=2):
+            return formatar_numero_br(float(v), casas)
+
+        def eixos(titulo, unidade):
+            self.canvas_grafico.create_text(
+                largura / 2, 22, text=titulo,
+                font=("Arial", 15, "bold")
+            )
+            self.canvas_grafico.create_line(x0, y0, x1, y0, width=2)
+            self.canvas_grafico.create_line(x0, y0, x0, y1, width=2)
+            self.canvas_grafico.create_text(
+                x0, y1 - 18, text=unidade, anchor="w",
+                font=("Arial", 9)
+            )
+
+        def barras(dados, titulo, unidade, fmt):
+            eixos(titulo, unidade)
+            if not dados:
+                return
+            maximo = max(v for _, v in dados) or 1.0
+            aw, ah = x1 - x0, y0 - y1
+            passo = aw / max(len(dados), 1)
+
             for i in range(6):
-                valor=maximo*i/5; y=y0-ah*i/5
-                self.canvas_grafico.create_line(x0,y,x1,y,fill="#e5e5e5")
-                self.canvas_grafico.create_text(x0-8,y,text=fmt(valor),anchor="e",font=("Arial",8),fill="#555555")
-            for i,(nome,valor) in enumerate(dados):
-                cx=x0+passo*(i+0.5); bw=min(70,passo*.62); h=ah*valor/maximo
-                self.canvas_grafico.create_rectangle(cx-bw/2,y0-h,cx+bw/2,y0,fill="#5b8ff9",outline="#2f5fb3")
-                self.canvas_grafico.create_text(cx,y0-h-10,text=fmt(valor),font=("Arial",9,"bold"),fill="#222222")
-                self.canvas_grafico.create_text(cx,y0+12,text=str(nome)[:18],font=("Arial",8),anchor="n")
-        if tipo=="Gasto por posto":
-            totais={}
+                valor = maximo * i / 5
+                y = y0 - ah * i / 5
+                self.canvas_grafico.create_line(x0, y, x1, y)
+                self.canvas_grafico.create_text(
+                    x0 - 8, y, text=fmt(valor), anchor="e",
+                    font=("Arial", 8)
+                )
+
+            for i, (nome, valor) in enumerate(dados):
+                cx = x0 + passo * (i + 0.5)
+                bw = min(75, passo * 0.62)
+                h = ah * valor / maximo
+                self.canvas_grafico.create_rectangle(
+                    cx - bw / 2, y0 - h, cx + bw / 2, y0,
+                    fill="#5b8ff9", outline="#2f5fb3"
+                )
+                self.canvas_grafico.create_text(
+                    cx, y0 - h - 10, text=fmt(valor),
+                    font=("Arial", 9, "bold")
+                )
+                self.canvas_grafico.create_text(
+                    cx, y0 + 12, text=str(nome)[:18],
+                    font=("Arial", 8), anchor="n"
+                )
+
+        if tipo == "Gasto por posto":
+            totais = {}
             for r in registros:
-                posto=str(r[2] or "Sem posto"); totais[posto]=totais.get(posto,0.0)+float(r[7] or 0.0)*float(r[8] or 0.0)
-            barras(sorted(totais.items(),key=lambda x:x[1],reverse=True)[:12],"Gasto total por posto","R$",lambda v:"R$ "+numero(v,0))
-        elif tipo=="Volume por posto":
-            totais={}
+                posto = str(r[2] or "Sem posto")
+                # SQLite: índice 7 = valor total em R$. Não multiplicar pela temperatura.
+                totais[posto] = totais.get(posto, 0.0) + float(r[7] or 0.0)
+            barras(
+                sorted(totais.items(), key=lambda x: x[1], reverse=True)[:12],
+                "Gasto total por posto", "R$",
+                lambda v: "R$ " + numero(v, 0)
+            )
+
+        elif tipo == "Volume por posto":
+            totais = {}
             for r in registros:
-                posto=str(r[2] or "Sem posto"); totais[posto]=totais.get(posto,0.0)+float(r[7] or 0.0)
-            barras(sorted(totais.items(),key=lambda x:x[1],reverse=True)[:12],"Volume abastecido por posto","m³",lambda v:numero(v,2)+" m³")
-        elif tipo=="Abastecimentos por posto":
-            contagem={}
+                posto = str(r[2] or "Sem posto")
+                # SQLite: índice 5 = volume marcado pela bomba em m³.
+                totais[posto] = totais.get(posto, 0.0) + float(r[5] or 0.0)
+            barras(
+                sorted(totais.items(), key=lambda x: x[1], reverse=True)[:12],
+                "Volume abastecido por posto", "m³",
+                lambda v: numero(v, 2) + " m³"
+            )
+
+        elif tipo == "Abastecimentos por posto":
+            contagem = {}
             for r in registros:
-                posto=str(r[2] or "Sem posto"); contagem[posto]=contagem.get(posto,0)+1
-            barras(sorted(contagem.items(),key=lambda x:x[1],reverse=True)[:12],"Quantidade de abastecimentos por posto","registros",lambda v:numero(v,0))
-        else:
-            pontos=[]
+                posto = str(r[2] or "Sem posto")
+                contagem[posto] = contagem.get(posto, 0) + 1
+            barras(
+                sorted(contagem.items(), key=lambda x: x[1], reverse=True)[:12],
+                "Quantidade de abastecimentos por posto", "registros",
+                lambda v: numero(v, 0)
+            )
+
+        elif tipo == "Km por m³":
+            pontos = []
+            anteriores = None
             for r in registros:
-                try:pontos.append((str(r[1] or ""),float(r[7] or 0.0)))
-                except (TypeError,ValueError):pass
-            pontos=sorted(pontos,key=lambda x:x[0])[-30:]; eixos("Evolução dos últimos abastecimentos","m³")
-            if not pontos:return
-            maximo=max(v for _,v in pontos) or 1.0; aw,ah=x1-x0,y0-y1
+                try:
+                    odo = float(r[4] or 0.0)
+                    volume = float(r[5] or 0.0)
+                    if anteriores is not None and odo > anteriores and volume > 0:
+                        pontos.append((str(r[1] or ""), (odo - anteriores) / volume))
+                    if odo > 0:
+                        anteriores = odo
+                except (TypeError, ValueError):
+                    continue
+            pontos = pontos[-20:]
+            eixos("Rendimento do veículo por abastecimento", "km por m³")
+            if not pontos:
+                self.canvas_grafico.create_text(
+                    (x0 + x1) / 2, (y0 + y1) / 2,
+                    text="São necessários pelo menos dois odômetros válidos.",
+                    font=("Arial", 11)
+                )
+                return
+            maximo = max(v for _, v in pontos) or 1.0
+            aw, ah = x1 - x0, y0 - y1
             for i in range(6):
-                valor=maximo*i/5;y=y0-ah*i/5;self.canvas_grafico.create_line(x0,y,x1,y,fill="#e5e5e5");self.canvas_grafico.create_text(x0-8,y,text=numero(valor,1),anchor="e",font=("Arial",8),fill="#555555")
-            coords=[]
-            for i,(data,valor) in enumerate(pontos):
-                x=x0 if len(pontos)==1 else x0+aw*i/(len(pontos)-1); y=y0-ah*valor/maximo; coords.append((x,y))
-            for a,b in zip(coords,coords[1:]):self.canvas_grafico.create_line(a[0],a[1],b[0],b[1],fill="#d95f02",width=3)
-            for i,((data,valor),(x,y)) in enumerate(zip(pontos,coords)):
-                self.canvas_grafico.create_oval(x-4,y-4,x+4,y+4,fill="#d95f02",outline="#8c3d00")
-                if i==0 or i==len(coords)-1 or len(coords)<=8:
-                    self.canvas_grafico.create_text(x,y+12,text=data[:10],anchor="n",font=("Arial",8));self.canvas_grafico.create_text(x,y-12,text=numero(valor,2),anchor="s",font=("Arial",8,"bold"))
+                valor = maximo * i / 5
+                y = y0 - ah * i / 5
+                self.canvas_grafico.create_line(x0, y, x1, y)
+                self.canvas_grafico.create_text(x0 - 8, y, text=numero(valor, 1), anchor="e", font=("Arial", 8))
+            coords = []
+            for i, (data, valor) in enumerate(pontos):
+                x = x0 if len(pontos) == 1 else x0 + aw * i / (len(pontos) - 1)
+                y = y0 - ah * valor / maximo
+                coords.append((x, y))
+            for a, b in zip(coords, coords[1:]):
+                self.canvas_grafico.create_line(a[0], a[1], b[0], b[1], width=3)
+            for i, ((data, valor), (x, y)) in enumerate(zip(pontos, coords)):
+                self.canvas_grafico.create_oval(x-5, y-5, x+5, y+5, fill="#d95f02", outline="#8c3d00")
+                if i == 0 or i == len(coords)-1 or len(coords) <= 8:
+                    self.canvas_grafico.create_text(x, y + 12, text=data[:10], anchor="n", font=("Arial", 8))
+                    self.canvas_grafico.create_text(x, y - 12, text=numero(valor, 2), anchor="s", font=("Arial", 8, "bold"))
+
+        elif tipo == "Bomba × teórico":
+            eixos("Volume marcado pela bomba × volume científico", "m³")
+            aw, ah = x1 - x0, y0 - y1
+            pontos = []
+            for i, r in enumerate(registros[-25:]):
+                try:
+                    bomba = float(r[5] or 0.0)
+                    teorico = float(r[18] or 0.0) if len(r) > 18 else 0.0
+                    if teorico > 0:
+                        pontos.append((i + 1, bomba, teorico))
+                except (TypeError, ValueError):
+                    continue
+            if not pontos:
+                self.canvas_grafico.create_text((x0+x1)/2, (y0+y1)/2, text="Nenhum volume teórico disponível.", font=("Arial", 11))
+                return
+            maximo = max(max(p[1], p[2]) for p in pontos) or 1.0
+            for i in range(6):
+                valor = maximo * i / 5
+                y = y0 - ah * i / 5
+                self.canvas_grafico.create_line(x0, y, x1, y)
+                self.canvas_grafico.create_text(x0-8, y, text=numero(valor, 1), anchor="e", font=("Arial", 8))
+            passo = aw / max(len(pontos), 1)
+            for idx, bomba, teorico in pontos:
+                cx = x0 + passo * (idx - 0.5)
+                hb = ah * bomba / maximo
+                ht = ah * teorico / maximo
+                bw = min(30, passo * .30)
+                self.canvas_grafico.create_rectangle(cx-bw-2, y0-hb, cx-2, y0, fill="#5b8ff9")
+                self.canvas_grafico.create_rectangle(cx+2, y0-ht, cx+bw+2, y0, fill="#59a14f")
+                self.canvas_grafico.create_text(cx, y0+12, text=str(idx), anchor="n", font=("Arial", 8))
+            self.canvas_grafico.create_text(x1-150, y1+5, text="Azul = bomba | Verde = científico", anchor="w", font=("Arial", 9))
+
+        else:  # Evolução do volume
+            pontos = []
+            for r in registros:
+                try:
+                    pontos.append((str(r[1] or ""), float(r[5] or 0.0)))
+                except (TypeError, ValueError):
+                    continue
+            pontos = pontos[-30:]
+            eixos("Evolução dos últimos abastecimentos", "m³")
+            if not pontos:
+                return
+            maximo = max(v for _, v in pontos) or 1.0
+            aw, ah = x1 - x0, y0 - y1
+            for i in range(6):
+                valor = maximo * i / 5
+                y = y0 - ah * i / 5
+                self.canvas_grafico.create_line(x0, y, x1, y)
+                self.canvas_grafico.create_text(x0 - 8, y, text=numero(valor, 1), anchor="e", font=("Arial", 8))
+            coords = []
+            for i, (data, valor) in enumerate(pontos):
+                x = x0 if len(pontos) == 1 else x0 + aw * i / (len(pontos) - 1)
+                y = y0 - ah * valor / maximo
+                coords.append((x, y))
+            for a, b in zip(coords, coords[1:]):
+                self.canvas_grafico.create_line(a[0], a[1], b[0], b[1], width=3)
+            for i, ((data, valor), (x, y)) in enumerate(zip(pontos, coords)):
+                self.canvas_grafico.create_oval(x-4, y-4, x+4, y+4, fill="#d95f02", outline="#8c3d00")
+                if i == 0 or i == len(coords)-1 or len(coords) <= 8:
+                    self.canvas_grafico.create_text(x, y+12, text=data[:10], anchor="n", font=("Arial", 8))
+                    self.canvas_grafico.create_text(x, y-12, text=numero(valor, 2), anchor="s", font=("Arial", 8, "bold"))
 
     def aplicar_idioma(self):
         """Atualiza nomes das abas e título principal conforme o idioma selecionado."""
@@ -8006,6 +8180,7 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
                 registro[0], registro[1], registro[2], registro[3], registro[4],
                 registro[5], registro[6], registro[7], registro[8], registro[9],
                 registro[10], registro[12], registro[13], registro[14], registro[15],
+                (float(registro[16] or 0) if len(registro) > 16 else 0.0),
                 metragem_anp, metragem_cientifica
             )
 
@@ -8371,6 +8546,8 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
             densidade_informada = converter_numero(self.entry_densidade_informada.get())
             if densidade_informada <= 0:
                 raise ValueError("Informe a massa específica do GNV em kg/m³.")
+            if temperatura <= -273.15:
+                raise ValueError("A temperatura deve ser maior que -273,15 °C.")
 
         except ValueError:
 
@@ -8460,19 +8637,18 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
         self.texto_resultados.insert(
             tk.END,
-            f"Volume TOTAL equivalente a 1,01325 bar na T informada: {formatar_numero_br(resultado['volume_equivalente_m3_temperatura_informada'], 3)} m³\n"
-            "(quantidade TOTAL presente no cilindro, calculada com Z informado)\n"
-            "Observação física: mantendo pressão final, volume do cilindro e Z constantes,\n"
-            "a temperatura usada para calcular os mols e a mesma temperatura usada na\n"
-            "reconversão se cancelam; por isso este valor pode permanecer praticamente constante.\n"
+            f"Volume TOTAL equivalente a 1,01325 bar na MESMA T informada: {formatar_numero_br(resultado['volume_equivalente_m3_temperatura_informada'], 3)} m³\n"
+            "(quantidade TOTAL recalculada para o estado informado)\n"
+            "ATENÇÃO: este número pode permanecer constante quando somente T é\n"
+            "alterada, porque n também é recalculado pela mesma equação PV=ZnRT.\n"
         )
 
         self.texto_resultados.insert(
             tk.END,
             f"Volume TOTAL equivalente científico a 20 °C: {formatar_numero_br(resultado['volume_equivalente_m3_20c'], 3)} m³\n"
-            "(mesma quantidade TOTAL de matéria, expressa a 20 °C)\n"
+            "(os mesmos mols calculados no estado informado, convertidos para 20 °C)\n"
             f"Volume ADICIONADO ANP/idealizado (Z=1) a 20 °C: {formatar_numero_br(resultado['volume_anp_ideal_m3_20c'], 3)} m³\n"
-            "(somente a variação entre pressão inicial e final)\n"
+            "(somente a variação entre pressão inicial e final; não é o total armazenado)\n"
         )
 
         self.texto_resultados.insert(
@@ -8535,9 +8711,9 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
             ("Volume físico ocupado pelo modelo", resultado["volume_real"], "m³", 6),
 
-            ("Volume equivalente a T ambiente informada", resultado["volume_equivalente_m3_temperatura_informada"], "m³", 3),
+            ("Volume total equivalente @ 1,01325 bar na mesma T", resultado["volume_equivalente_m3_temperatura_informada"], "m³", 3),
 
-            ("Volume equivalente na referência ANP (20 °C)", resultado["volume_equivalente_m3_20c"], "m³", 3),
+            ("Volume total equivalente a 20 °C", resultado["volume_equivalente_m3_20c"], "m³", 3),
 
         ]
 
@@ -8563,2713 +8739,131 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 # =============================================================================
 
     def atualizar_estatisticas(self):
-
+        """Atualiza a aba Total de Abastecimentos sem duplicar conteúdo."""
         registros = self.banco.listar_abastecimentos()
-
-        # A atualização deve substituir o relatório anterior, nunca acrescentá-lo.
         self.texto_estatisticas.configure(state="normal")
         self.texto_estatisticas.delete("1.0", "end")
 
-        total = len(
-
-            registros
-
-        )
-
-        self.label_estatisticas.configure(
-
-            text=f"Total de abastecimentos: {total}"
-
-        )
-
-
-# =============================================================================
-# PARTE 271
-# VARIÁVEIS
-# =============================================================================
-
-        total_gasto = 0.0
-
-        total_volume = 0.0
-
-        total_preco = 0.0
-
-        maior_volume = 0.0
-
-        menor_volume = None
-
-        postos = set()
-
-        cidades = set()
-
-
-# =============================================================================
-# PARTE 272
-# PERCORRE REGISTROS
-# =============================================================================
-
-        for registro in registros:
-
-            volume = float(registro[5])
-
-            preco = float(registro[6])
-
-            valor = float(registro[7])
-
-            total_gasto += valor
-
-            total_volume += volume
-
-            total_preco += preco
-
-            postos.add(
-
-                registro[2]
-
-            )
-
-            cidades.add(
-
-                registro[3]
-
-            )
-
-            if volume > maior_volume:
-
-                maior_volume = volume
-
-            if menor_volume is None:
-
-                menor_volume = volume
-
-            elif volume < menor_volume:
-
-                menor_volume = volume
-
-
-# =============================================================================
-# PARTE 276
-# CÁLCULO DAS MÉDIAS
-# =============================================================================
-
-        if registros:
-
-            media_preco = total_preco / len(registros)
-
-            media_volume = total_volume / len(registros)
-
-        else:
-
-            media_preco = 0
-
-            media_volume = 0
-
-# =============================================================================
-# PARTE 277
-# TOTAL GASTO
-# =============================================================================
-
-        self.lbl_total_gasto.configure(
-
-            text=f"Total Gasto: R$ {total_gasto:,.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 278
-# TOTAL M3
-# =============================================================================
-
-        self.lbl_total_m3.configure(
-
-            text=f"Total Abastecido: {total_volume:.2f} m³"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 279
-# MÉDIA PREÇO
-# =============================================================================
-
-        self.lbl_media_preco.configure(
-
-            text=f"Preço Médio: R$ {media_preco:.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 280
-# MÉDIA VOLUME
-# =============================================================================
-
-        self.lbl_media_volume.configure(
-
-            text=f"Volume Médio: {media_volume:.2f} m³"
-
-        )
-
-
-# =============================================================================
-# PARTE 281
-# MELHOR ABASTECIMENTO
-# =============================================================================
-
-        self.lbl_melhor.configure(
-
-            text=f"Maior abastecimento: {maior_volume:.2f} m³"
-
-        )
-
-
-# =============================================================================
-# PARTE 282
-# MENOR ABASTECIMENTO
-# =============================================================================
-
-        if menor_volume is None:
-
-            menor_volume = 0
-
-        self.lbl_menor.configure(
-
-            text=f"Menor abastecimento: {menor_volume:.2f} m³"
-
-        )
-
-
-# =============================================================================
-# PARTE 283
-# POSTOS
-# =============================================================================
-
-        self.lbl_postos.configure(
-
-            text=f"Postos cadastrados: {len(postos)}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 284
-# CIDADES
-# =============================================================================
-
-        self.lbl_cidades.configure(
-
-            text=f"Cidades cadastradas: {len(cidades)}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 285
-# PIOR ABASTECIMENTO
-# =============================================================================
-
-        self.lbl_pior.configure(
-
-            text="Pior abastecimento: em desenvolvimento"
-
-        )
-
-
-# =============================================================================
-# PARTE 286
-# MAIOR VALOR
-# =============================================================================
-
-        maior_valor = 0
-
-        for registro in registros:
-
-            valor = float(
-
-                registro[7]
-
-            )
-
-            if valor > maior_valor:
-
-                maior_valor = valor
-
-
-
-# =============================================================================
-# PARTE 287
-# MENOR VALOR
-# =============================================================================
-
-        if registros:
-
-            menor_valor = float(
-
-                registros[0][7]
-
-            )
-
-            for registro in registros:
-
-                valor = float(
-
-                    registro[7]
-
-                )
-
-                if valor < menor_valor:
-
-                    menor_valor = valor
-
-        else:
-
-            menor_valor = 0
-
-
-# =============================================================================
-# PARTE 288
-# LABEL MAIOR VALOR
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"Maior valor pago : R$ {maior_valor:.2f}\n"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 289
-# LABEL MENOR VALOR
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"Menor valor pago : R$ {menor_valor:.2f}\n"
-
-        )
-
-
-# =============================================================================
-# PARTE 290
-# FINALIZA TEXTO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\nEstatísticas atualizadas com sucesso."
-
-        )
-
-
-# =============================================================================
-# PARTE 291
-# LABEL MAIOR VALOR
-# =============================================================================
-
-        self.lbl_maior.configure(
-
-            text=f"Maior valor pago: R$ {maior_valor:.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 292
-# LABEL MENOR VALOR
-# =============================================================================
-
-        self.lbl_pior.configure(
-
-            text=f"Menor valor pago: R$ {menor_valor:.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 293
-# QUANTIDADE DE POSTOS
-# =============================================================================
-
-        quantidade_postos = len(
-
-            postos
-
-        )
-
-
-# =============================================================================
-# PARTE 294
-# QUANTIDADE DE CIDADES
-# =============================================================================
-
-        quantidade_cidades = len(
-
-            cidades
-
-        )
-
-
-# =============================================================================
-# PARTE 295
-# ATUALIZA LABELS
-# =============================================================================
-
-        self.lbl_postos.configure(
-
-            text=f"Postos cadastrados: {quantidade_postos}"
-
-        )
-
-        self.lbl_cidades.configure(
-
-            text=f"Cidades cadastradas: {quantidade_cidades}"
-
-        )
-
-
-# =============================================================================
-# PARTE 296
-# RANKING DE POSTOS
-# =============================================================================
+        total = len(registros)
+        self.label_estatisticas.configure(text=f"Total de abastecimentos: {total}")
+
+        volumes = [float(r[5] or 0.0) for r in registros]
+        valores = [float(r[7] or 0.0) for r in registros]
+        precos = [float(r[6] or 0.0) for r in registros]
+
+        total_volume = sum(volumes)
+        total_gasto = sum(valores)
+        media_volume = total_volume / total if total else 0.0
+        media_preco = sum(precos) / total if total else 0.0
+        maior_volume = max(volumes, default=0.0)
+        menor_volume = min(volumes, default=0.0)
+        maior_valor = max(valores, default=0.0)
+        menor_valor = min(valores, default=0.0)
+
+        postos = {str(r[2] or "-") for r in registros}
+        cidades = {str(r[3] or "-") for r in registros}
 
         ranking_postos = {}
-
-        for registro in registros:
-
-            posto = registro[2]
-
-            ranking_postos[posto] = ranking_postos.get(
-
-                posto,
-
-                0
-
-            ) + 1
-
-
-# =============================================================================
-# PARTE 297
-# POSTO MAIS UTILIZADO
-# =============================================================================
-
-        if ranking_postos:
-
-            posto_favorito = max(
-
-                ranking_postos,
-
-                key=ranking_postos.get
-
-            )
-
-        else:
-
-            posto_favorito = "-"
-
-
-# =============================================================================
-# PARTE 298
-# RANKING DE CIDADES
-# =============================================================================
-
         ranking_cidades = {}
-
-        for registro in registros:
-
-            cidade = registro[3]
-
-            ranking_cidades[cidade] = ranking_cidades.get(
-
-                cidade,
-
-                0
-
-            ) + 1
-
-
-# =============================================================================
-# PARTE 299
-# CIDADE MAIS UTILIZADA
-# =============================================================================
-
-        if ranking_cidades:
-
-            cidade_favorita = max(
-
-                ranking_cidades,
-
-                key=ranking_cidades.get
-
-            )
-
-        else:
-
-            cidade_favorita = "-"
-
-
-# =============================================================================
-# PARTE 300
-# EXIBIR RANKING
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nPosto mais utilizado : {posto_favorito}"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nCidade mais utilizada : {cidade_favorita}"
-
-        )
-
-
-# =============================================================================
-# PARTE 301
-# TOTAL POR POSTO
-# =============================================================================
-
-        total_por_posto = {}
-
-        for registro in registros:
-
-            posto = registro[2]
-
-            valor = float(
-
-                registro[7]
-
-            )
-
-            total_por_posto[posto] = total_por_posto.get(
-
-                posto,
-
-                0
-
-            ) + valor
-
-
-
-
-# =============================================================================
-# PARTE 302
-# POSTO COM MAIOR GASTO
-# =============================================================================
-
-        if total_por_posto:
-
-            posto_maior_gasto = max(
-
-                total_por_posto,
-
-                key=total_por_posto.get
-
-            )
-
-        else:
-
-            posto_maior_gasto = "-"
-
-
-
-# =============================================================================
-# PARTE 303
-# TOTAL POR CIDADE
-# =============================================================================
-
-        total_por_cidade = {}
-
-        for registro in registros:
-
-            cidade = registro[3]
-
-            valor = float(
-
-                registro[7]
-
-            )
-
-            total_por_cidade[cidade] = total_por_cidade.get(
-
-                cidade,
-
-                0
-
-            ) + valor
-
-
-
-# =============================================================================
-# PARTE 304
-# CIDADE COM MAIOR GASTO
-# =============================================================================
-
-        if total_por_cidade:
-
-            cidade_maior_gasto = max(
-
-                total_por_cidade,
-
-                key=total_por_cidade.get
-
-            )
-
-        else:
-
-            cidade_maior_gasto = "-"
-
-
-
-
-
-# =============================================================================
-# PARTE 305
-# RESUMO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior gasto por posto : {posto_maior_gasto}"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior gasto por cidade : {cidade_maior_gasto}"
-
-        )
-
-
-# =============================================================================
-# PARTE 306
-# MAIOR VOLUME POR POSTO
-# =============================================================================
-
-        volume_por_posto = {}
-
-        for registro in registros:
-
-            posto = registro[2]
-
-            volume = float(
-
-                registro[5]
-
-            )
-
-            volume_por_posto[posto] = volume_por_posto.get(
-
-                posto,
-
-                0
-
-            ) + volume
-
-
-
-# =============================================================================
-# PARTE 307
-# POSTO MAIOR VOLUME
-# =============================================================================
-
-        if volume_por_posto:
-
-            posto_maior_volume = max(
-
-                volume_por_posto,
-
-                key=volume_por_posto.get
-
-            )
-
-        else:
-
-            posto_maior_volume = "-"
-
-
-
-# =============================================================================
-# PARTE 308
-# MÉDIA DE VALOR
-# =============================================================================
-
-        if registros:
-
-            media_valor = total_gasto / len(
-
-                registros
-
-            )
-
-        else:
-
-            media_valor = 0
-
-
-# =============================================================================
-# PARTE 309
-# MÉDIA GERAL
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nValor médio por abastecimento : "
-
-            f"R$ {media_valor:.2f}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 310
-# POSTO MAIOR VOLUME
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nPosto com maior volume : "
-
-            f"{posto_maior_volume}"
-
-        )
-
-
-# =============================================================================
-# PARTE 311
-# ANO MAIS ANTIGO
-# =============================================================================
-
-        anos = []
-
-        for registro in registros:
-
+        gasto_postos = {}
+        gasto_cidades = {}
+        volume_postos = {}
+        for r in registros:
+            posto = str(r[2] or "-")
+            cidade = str(r[3] or "-")
+            valor = float(r[7] or 0.0)
+            volume = float(r[5] or 0.0)
+            ranking_postos[posto] = ranking_postos.get(posto, 0) + 1
+            ranking_cidades[cidade] = ranking_cidades.get(cidade, 0) + 1
+            gasto_postos[posto] = gasto_postos.get(posto, 0.0) + valor
+            gasto_cidades[cidade] = gasto_cidades.get(cidade, 0.0) + valor
+            volume_postos[posto] = volume_postos.get(posto, 0.0) + volume
+
+        posto_favorito = max(ranking_postos, key=ranking_postos.get) if ranking_postos else "-"
+        cidade_favorita = max(ranking_cidades, key=ranking_cidades.get) if ranking_cidades else "-"
+        posto_maior_gasto = max(gasto_postos, key=gasto_postos.get) if gasto_postos else "-"
+        cidade_maior_gasto = max(gasto_cidades, key=gasto_cidades.get) if gasto_cidades else "-"
+        posto_maior_volume = max(volume_postos, key=volume_postos.get) if volume_postos else "-"
+
+        # Rendimento: cada abastecimento é comparado ao odômetro anterior válido.
+        km_m3 = []
+        odometro_anterior = None
+        for r in registros:
             try:
-
-                ano = int(
-
-                    str(registro[1])[-4:]
-
-                )
-
-                anos.append(
-
-                    ano
-
-                )
-
-            except:
-
-                pass
-
-
-# =============================================================================
-# PARTE 312
-# ANO MAIS RECENTE
-# =============================================================================
-
-        if anos:
-
-            primeiro_ano = min(
-
-                anos
-
-            )
-
-            ultimo_ano = max(
-
-                anos
-
-            )
-
-        else:
-
-            primeiro_ano = "-"
-
-            ultimo_ano = "-"
-
-
-# =============================================================================
-# PARTE 313
-# PERÍODO DOS DADOS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nPeríodo: {primeiro_ano} até {ultimo_ano}"
-
-        )
-
-
-# =============================================================================
-# PARTE 314
-# MÉDIA POR POSTO
-# =============================================================================
-
-        if quantidade_postos:
-
-            media_posto = len(
-
-                registros
-
-            ) / quantidade_postos
-
-        else:
-
-            media_posto = 0
-
-
-
-# =============================================================================
-# PARTE 315
-# EXIBE MÉDIA
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nAbastecimentos por posto: "
-
-            f"{media_posto:.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 316
-# MÉDIA POR CIDADE
-# =============================================================================
-
-        if quantidade_cidades:
-
-            media_cidade = len(
-
-                registros
-
-            ) / quantidade_cidades
-
-        else:
-
-            media_cidade = 0
-
-
-# =============================================================================
-# PARTE 317
-# EXIBE MÉDIA CIDADE
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nAbastecimentos por cidade: "
-
-            f"{media_cidade:.2f}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 318
-# VOLUME MÉDIO POR POSTO
-# =============================================================================
-
-        if quantidade_postos:
-
-            volume_medio_posto = total_volume / quantidade_postos
-
-        else:
-
-            volume_medio_posto = 0
-
-
-
-# =============================================================================
-# PARTE 319
-# EXIBE VOLUME MÉDIO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nVolume médio por posto: "
-
-            f"{volume_medio_posto:.2f} m³"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 320
-# FINALIZA RELATÓRIO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n\n========================================"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\nFim das estatísticas."
-
-        )
-
-
-# =============================================================================
-# PARTE 321
-# LIMPAR TEXTO
-# =============================================================================
-
-        # -------------------------------------------------------------
-        # COMPARAÇÃO DOS ABASTECIMENTOS
-        # -------------------------------------------------------------
-        volumes_bomba = []
-        volumes_teoricos = []
-        diferencas = []
-        percentuais = []
-
-        fator_z_stats = 0.92
-        massa_molar_stats = 0.01604
-
-        if hasattr(self, "entry_fator_z"):
-            try:
-                fator_z_stats = converter_numero(self.entry_fator_z.get())
-            except ValueError:
-                pass
-
-        if hasattr(self, "entry_massa_molar"):
-            try:
-                massa_molar_stats = converter_numero(self.entry_massa_molar.get())
-            except ValueError:
-                pass
-
-        for registro in registros:
-            if len(registro) < 15:
+                odo = float(r[4] or 0.0)
+                volume = float(r[5] or 0.0)
+            except (TypeError, ValueError):
                 continue
-
-            capacidade = float(registro[12] or 0)
-            pressao_i = float(registro[13] or 0)
-            pressao_f = float(registro[14] or 0)
-
-            if capacidade <= 0 or pressao_f < pressao_i:
-                continue
-
-            try:
-                comparacao = calcular_comparacao_abastecimento(
-                    capacidade,
-                    pressao_i,
-                    pressao_f,
-                    float(registro[8] or 20),
-                    float(registro[10] or 0),
-                    fator_z_stats,
-                    massa_molar_stats
-                )
-            except (ValueError, ZeroDivisionError):
-                continue
-
-            bomba = float(registro[5] or 0)
-            teorico = comparacao["volume_teorico_m3"]
-            diferenca = bomba - teorico
-
-            volumes_bomba.append(bomba)
-            volumes_teoricos.append(teorico)
-            diferencas.append(diferenca)
-
-            if teorico > 0:
-                percentuais.append((diferenca / teorico) * 100.0)
-
-        self.texto_estatisticas.insert(
-            tk.END,
-            "\n\nCOMPARAÇÃO DOS ABASTECIMENTOS\n"
-            "----------------------------------------\n"
-        )
-
-        if volumes_teoricos:
-            media_bomba = sum(volumes_bomba) / len(volumes_bomba)
-            media_teorico = sum(volumes_teoricos) / len(volumes_teoricos)
-            media_diferenca = sum(diferencas) / len(diferencas)
-            media_percentual = sum(percentuais) / len(percentuais) if percentuais else 0.0
-
-            self.texto_estatisticas.insert(
-                tk.END,
-                f"Média marcada pelas bombas : {formatar_numero_br(media_bomba, 3)} m³\n"
-                f"Média calculada teoricamente: {formatar_numero_br(media_teorico, 3)} m³\n"
-                f"Diferença média             : {formatar_numero_br(media_diferenca, 3)} m³\n"
-                f"Diferença média percentual  : {formatar_numero_br(media_percentual, 2)} %\n"
-                f"Abastecimentos comparáveis  : {len(volumes_teoricos)}\n"
-                "Referência: 20 °C e 1,01325 bar; Z e massa molar da aba Cálculos.\n"
-                "Esses números são uma comparação física e não, isoladamente,\n"
-                "uma prova metrológica de fraude.\n"
-            )
-        else:
-            self.texto_estatisticas.insert(
-                tk.END,
-                "Nenhum abastecimento possui ainda capacidade e pressões\n"
-                "inicial/final suficientes para a comparação física.\n"
-            )
-
-        self.texto_estatisticas.see(
-
-            tk.END
-
-        )
-
-
-# =============================================================================
-# PARTE 322
-# STATUS
-# =============================================================================
-
-        self.status.set(
-
-            "Estatísticas atualizadas."
-
-        )
-
-
-
-# =============================================================================
-# PARTE 323
-# REFRESH
-# =============================================================================
-
-        self.janela.update_idletasks()
-
-
-
-# =============================================================================
-# PARTE 324
-# LOG
-# =============================================================================
-
-        print(
-
-            "Estatísticas atualizadas."
-
-        )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# =============================================================================
-# PARTE 325
-# FIM
-# =============================================================================
-
+            if odometro_anterior is not None and odo > odometro_anterior and volume > 0:
+                km_m3.append((odo - odometro_anterior) / volume)
+            if odo > 0:
+                odometro_anterior = odo
+
+        media_km_m3 = sum(km_m3) / len(km_m3) if km_m3 else 0.0
+        melhor_km_m3 = max(km_m3, default=0.0)
+        pior_km_m3 = min(km_m3, default=0.0)
+        volume_medio_posto = total_volume / len(volume_postos) if volume_postos else 0.0
+
+        primeira_data = registros[0][1] if registros else "-"
+        ultima_data = registros[-1][1] if registros else "-"
+
+        linhas = [
+            "TOTAL DE ABASTECIMENTOS",
+            "=" * 62,
+            "",
+            f"Quantidade de abastecimentos : {total}",
+            f"Total de GNV abastecido      : {formatar_numero_br(total_volume, 3)} m³",
+            f"Gasto total                  : R$ {formatar_numero_br(total_gasto, 2)}",
+            f"Preço médio por m³           : R$ {formatar_numero_br(media_preco, 3)}",
+            f"Volume médio por abastecimento: {formatar_numero_br(media_volume, 3)} m³",
+            f"Maior abastecimento           : {formatar_numero_br(maior_volume, 3)} m³",
+            f"Menor abastecimento           : {formatar_numero_br(menor_volume, 3)} m³",
+            f"Maior valor pago              : R$ {formatar_numero_br(maior_valor, 2)}",
+            f"Menor valor pago              : R$ {formatar_numero_br(menor_valor, 2)}",
+            "",
+            "RENDIMENTO DO VEÍCULO",
+            "=" * 62,
+            "km por m³ é calculado entre dois abastecimentos com odômetros válidos.",
+            f"Média de rendimento           : {formatar_numero_br(media_km_m3, 2)} km/m³" if km_m3 else "Média de rendimento           : não calculável ainda",
+            f"Melhor rendimento             : {formatar_numero_br(melhor_km_m3, 2)} km/m³" if km_m3 else "Melhor rendimento             : -",
+            f"Menor rendimento              : {formatar_numero_br(pior_km_m3, 2)} km/m³" if km_m3 else "Menor rendimento              : -",
+            "",
+            "POSTOS E CIDADES",
+            "=" * 62,
+            f"Postos cadastrados            : {len(postos)}",
+            f"Cidades cadastradas           : {len(cidades)}",
+            f"Posto mais utilizado          : {posto_favorito}",
+            f"Cidade mais utilizada         : {cidade_favorita}",
+            f"Posto com maior gasto         : {posto_maior_gasto}",
+            f"Cidade com maior gasto        : {cidade_maior_gasto}",
+            f"Posto com maior volume        : {posto_maior_volume}",
+            f"Volume médio por posto       : {formatar_numero_br(volume_medio_posto, 3)} m³",
+            "",
+            "PERÍODO",
+            "=" * 62,
+            f"Primeiro abastecimento        : {primeira_data}",
+            f"Último abastecimento          : {ultima_data}",
+            "",
+            "OBSERVAÇÃO",
+            "O rendimento em km/m³ depende do volume realmente medido pela bomba.",
+            "Para comparar com a metragem teórica, use a aba Gráficos de Abastecimento.",
+        ]
+        self.texto_estatisticas.insert(tk.END, "\n".join(linhas))
+        self.texto_estatisticas.see("1.0")
+
+        # Os labels antigos são mantidos para compatibilidade com outras partes do programa.
+        self.lbl_total_gasto.configure(text=f"Total Gasto: R$ {formatar_numero_br(total_gasto, 2)}")
+        self.lbl_total_m3.configure(text=f"Total Abastecido: {formatar_numero_br(total_volume, 2)} m³")
+        self.lbl_media_preco.configure(text=f"Preço Médio: R$ {formatar_numero_br(media_preco, 2)}")
+        self.lbl_media_volume.configure(text=f"Volume Médio: {formatar_numero_br(media_volume, 2)} m³")
+        self.lbl_maior.configure(text=f"Maior abastecimento: {formatar_numero_br(maior_volume, 2)} m³")
+        self.lbl_menor.configure(text=f"Menor abastecimento: {formatar_numero_br(menor_volume, 2)} m³")
+        self.lbl_postos.configure(text=f"Postos cadastrados: {len(postos)}")
+        self.lbl_cidades.configure(text=f"Cidades cadastradas: {len(cidades)}")
+        self.lbl_pior.configure(text=f"Menor valor pago: R$ {formatar_numero_br(menor_valor, 2)}")
+
+        self.texto_estatisticas.configure(state="disabled")
         return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# =============================================================================
-# PARTE 326
-# ABASTECIMENTOS POR ANO
-# =============================================================================
-
-        abastecimentos_ano = {}
-
-        for registro in registros:
-
-            try:
-
-                ano = str(
-
-                    registro[1]
-
-                )[-4:]
-
-                abastecimentos_ano[ano] = abastecimentos_ano.get(
-
-                    ano,
-
-                    0
-
-                ) + 1
-
-            except:
-
-                pass
-
-
-# =============================================================================
-# PARTE 327
-# MOSTRA ANOS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n\nAbastecimentos por ano:\n"
-
-        )
-
-        for ano in sorted(
-
-            abastecimentos_ano.keys()
-
-        ):
-
-            self.texto_estatisticas.insert(
-
-                tk.END,
-
-                f"{ano}: {abastecimentos_ano[ano]}\n"
-
-            )
-
-
-
-# =============================================================================
-# PARTE 328
-# ANO COM MAIS ABASTECIMENTOS
-# =============================================================================
-
-        if abastecimentos_ano:
-
-            ano_recorde = max(
-
-                abastecimentos_ano,
-
-                key=abastecimentos_ano.get
-
-            )
-
-        else:
-
-            ano_recorde = "-"
-
-
-
-# =============================================================================
-# PARTE 329
-# MOSTRAR RECORDE
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nAno com mais abastecimentos: {ano_recorde}"
-
-        )
-
-
-# =============================================================================
-# PARTE 330
-# ENCERRA ESTATÍSTICAS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n\n=========================================\n"
-
-        )
-
-
-# =============================================================================
-# PARTE 331
-# ABASTECIMENTOS POR MÊS
-# =============================================================================
-
-        abastecimentos_mes = {}
-
-        for registro in registros:
-
-            try:
-
-                data = str(
-
-                    registro[1]
-
-                )
-
-                mes = data[3:5]
-
-                abastecimentos_mes[mes] = abastecimentos_mes.get(
-
-                    mes,
-
-                    0
-
-                ) + 1
-
-            except:
-
-                pass
-
-
-# =============================================================================
-# PARTE 332
-# MOSTRAR POR MÊS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\nAbastecimentos por mês:\n"
-
-        )
-
-        for mes in sorted(
-
-            abastecimentos_mes.keys()
-
-        ):
-
-            self.texto_estatisticas.insert(
-
-                tk.END,
-
-                f"Mês {mes}: {abastecimentos_mes[mes]}\n"
-
-            )
-
-
-# =============================================================================
-# PARTE 333
-# KM RODADOS
-# =============================================================================
-
-        km_total = 0
-
-        if len(registros) >= 2:
-
-            km_inicial = float(
-
-                registros[0][4]
-
-            )
-
-            km_final = float(
-
-                registros[-1][4]
-
-            )
-
-            km_total = km_final - km_inicial
-
-
-# =============================================================================
-# PARTE 334
-# MOSTRAR KM
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nQuilometragem percorrida: "
-
-            f"{km_total:.0f} km"
-
-        )
-
-# =============================================================================
-# PARTE 335
-# MÉDIA POR KM
-# =============================================================================
-
-        if km_total > 0:
-
-            media_km = total_volume / km_total
-
-        else:
-
-            media_km = 0
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nConsumo médio: "
-
-            f"{media_km:.4f} m³/km"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 336
-# MAIOR KM
-# =============================================================================
-
-        maior_km = 0
-
-        for registro in registros:
-
-            km = float(
-
-                registro[4]
-
-            )
-
-            if km > maior_km:
-
-                maior_km = km
-
-
-
-# =============================================================================
-# PARTE 337
-# MENOR KM
-# =============================================================================
-
-        if registros:
-
-            menor_km = float(
-
-                registros[0][4]
-
-            )
-
-            for registro in registros:
-
-                km = float(
-
-                    registro[4]
-
-                )
-
-                if km < menor_km:
-
-                    menor_km = km
-
-        else:
-
-            menor_km = 0
-
-
-
-
-# =============================================================================
-# PARTE 338
-# EXIBE MAIOR KM
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior hodômetro: {maior_km:.0f} km"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 339
-# EXIBE MENOR KM
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMenor hodômetro: {menor_km:.0f} km"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 340
-# TOTAL DE POSTOS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nQuantidade de postos: "
-
-            f"{len(postos)}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 341
-# TOTAL DE CIDADES
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nQuantidade de cidades: "
-
-            f"{len(cidades)}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 342
-# MÉDIA POR POSTO
-# =============================================================================
-
-        if len(postos) > 0:
-
-            media_gasto_posto = total_gasto / len(postos)
-
-        else:
-
-            media_gasto_posto = 0
-
-
-
-# =============================================================================
-# PARTE 343
-# EXIBE MÉDIA POSTO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nGasto médio por posto: "
-
-            f"R$ {media_gasto_posto:.2f}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 344
-# MÉDIA POR CIDADE
-# =============================================================================
-
-        if len(cidades) > 0:
-
-            media_gasto_cidade = total_gasto / len(cidades)
-
-        else:
-
-            media_gasto_cidade = 0
-
-
-# =============================================================================
-# PARTE 345
-# EXIBE MÉDIA CIDADE
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nGasto médio por cidade: "
-
-            f"R$ {media_gasto_cidade:.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 346
-# MÉDIA KM
-# =============================================================================
-
-        if len(registros) > 0:
-
-            media_km_abastecimento = km_total / len(registros)
-
-        else:
-
-            media_km_abastecimento = 0
-
-
-# =============================================================================
-# PARTE 347
-# EXIBE MÉDIA KM
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nKM médio por abastecimento: "
-
-            f"{media_km_abastecimento:.2f} km"
-
-        )
-
-
-# =============================================================================
-# PARTE 348
-# GASTO POR KM
-# =============================================================================
-
-        if km_total > 0:
-
-            gasto_km = total_gasto / km_total
-
-        else:
-
-            gasto_km = 0
-
-
-# =============================================================================
-# PARTE 349
-# EXIBE GASTO KM
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nGasto médio por km: "
-
-            f"R$ {gasto_km:.4f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 350
-# SEPARADOR
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n--------------------------------------------"
-
-        )
-
-
-# =============================================================================
-# PARTE 351
-# TOTAL DE DIAS
-# =============================================================================
-
-        datas = set()
-
-        for registro in registros:
-
-            datas.add(
-
-                registro[1]
-
-            )
-
-
-
-# =============================================================================
-# PARTE 352
-# MOSTRAR DIAS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nDias com abastecimento: "
-
-            f"{len(datas)}"
-
-        )
-
-
-# =============================================================================
-# PARTE 353
-# MÉDIA POR DIA
-# =============================================================================
-
-        if len(datas) > 0:
-
-            media_dia = len(
-
-                registros
-
-            ) / len(datas)
-
-        else:
-
-            media_dia = 0
-
-
-# =============================================================================
-# PARTE 354
-# EXIBE MÉDIA DIA
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMédia por dia: "
-
-            f"{media_dia:.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 355
-# FIM DO BLOCO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n============================================\n"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 356
-# TOTAL DE MESES
-# =============================================================================
-
-        meses = set()
-
-        for registro in registros:
-
-            try:
-
-                mes = str(
-
-                    registro[1]
-
-                )[3:5]
-
-                meses.add(
-
-                    mes
-
-                )
-
-            except:
-
-                pass
-
-
-
-
-# =============================================================================
-# PARTE 357
-# MOSTRA MESES
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMeses registrados: "
-
-            f"{len(meses)}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 358
-# MÉDIA MENSAL
-# =============================================================================
-
-        if len(meses) > 0:
-
-            media_mes = len(
-
-                registros
-
-            ) / len(meses)
-
-        else:
-
-            media_mes = 0
-
-
-
-# =============================================================================
-# PARTE 359
-# EXIBE MÉDIA MENSAL
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMédia mensal: "
-
-            f"{media_mes:.2f} abastecimentos"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 360
-# FINAL DO RELATÓRIO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\nRelatório concluído."
-
-        )
-
-
-
-# =============================================================================
-# PARTE 361
-# TOTAL DE ANOS
-# =============================================================================
-
-        total_anos = len(
-
-            abastecimentos_ano
-
-        )
-
-
-
-
-# =============================================================================
-# PARTE 362
-# EXIBE ANOS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nAnos registrados: "
-
-            f"{total_anos}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 363
-# MÉDIA ANUAL
-# =============================================================================
-
-        if total_anos > 0:
-
-            media_anual = len(
-
-                registros
-
-            ) / total_anos
-
-        else:
-
-            media_anual = 0
-
-
-
-# =============================================================================
-# PARTE 364
-# EXIBE MÉDIA ANUAL
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMédia anual: "
-
-            f"{media_anual:.2f} abastecimentos"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 365
-# ENCERRAMENTO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n============================================"
-
-        )
-
-
-# =============================================================================
-# PARTE 366
-# MAIOR PREÇO DO M³
-# =============================================================================
-
-        maior_preco = 0
-
-        for registro in registros:
-
-            preco = float(
-
-                registro[6]
-
-            )
-
-            if preco > maior_preco:
-
-                maior_preco = preco
-
-
-# =============================================================================
-# PARTE 367
-# MENOR PREÇO DO M³
-# =============================================================================
-
-        if registros:
-
-            menor_preco = float(
-
-                registros[0][6]
-
-            )
-
-            for registro in registros:
-
-                preco = float(
-
-                    registro[6]
-
-                )
-
-                if preco < menor_preco:
-
-                    menor_preco = preco
-
-        else:
-
-            menor_preco = 0
-
-
-# =============================================================================
-# PARTE 368
-# EXIBE MAIOR PREÇO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior preço do m³: "
-
-            f"R$ {maior_preco:.3f}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 369
-# EXIBE MENOR PREÇO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMenor preço do m³: "
-
-            f"R$ {menor_preco:.3f}"
-
-        )
-
-
-
-
-# =============================================================================
-# PARTE 370
-# DIFERENÇA DE PREÇO
-# =============================================================================
-
-        diferenca_preco = maior_preco - menor_preco
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nDiferença de preço: "
-
-            f"R$ {diferenca_preco:.3f}"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 371
-# SOMA DAS PRESSÕES
-# =============================================================================
-
-        soma_pressao = 0
-
-        for registro in registros:
-
-            soma_pressao += float(
-
-                registro[9]
-
-            )
-
-
-
-# =============================================================================
-# PARTE 372
-# MÉDIA DA PRESSÃO
-# =============================================================================
-
-        if registros:
-
-            media_pressao = (
-
-                soma_pressao /
-
-                len(registros)
-
-            )
-
-        else:
-
-            media_pressao = 0
-
-
-
-# =============================================================================
-# PARTE 373
-# EXIBE PRESSÃO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nPressão média: "
-
-            f"{media_pressao:.3f} bar"
-
-        )
-
-
-
-
-# =============================================================================
-# PARTE 374
-# SOMA DAS TEMPERATURAS
-# =============================================================================
-
-        soma_temperatura = 0
-
-        for registro in registros:
-
-            soma_temperatura += float(
-
-                registro[8]
-
-            )
-
-
-
-
-# =============================================================================
-# PARTE 375
-# MÉDIA TEMPERATURA
-# =============================================================================
-
-        if registros:
-
-            media_temperatura = (
-
-                soma_temperatura /
-
-                len(registros)
-
-            )
-
-        else:
-
-            media_temperatura = 0
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nTemperatura média: "
-
-            f"{media_temperatura:.2f} °C"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 376
-# MAIOR PRESSÃO
-# =============================================================================
-
-        maior_pressao = max(
-
-            (
-
-                float(r[9])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-
-# =============================================================================
-# PARTE 377
-# MENOR PRESSÃO
-# =============================================================================
-
-        if registros:
-
-            menor_pressao = float(
-
-                registros[0][9]
-
-            )
-
-            for registro in registros:
-
-                pressao = float(
-
-                    registro[9]
-
-                )
-
-                if pressao < menor_pressao:
-
-                    menor_pressao = pressao
-
-        else:
-
-            menor_pressao = 0
-
-
-
-# =============================================================================
-# PARTE 378
-# EXIBE PRESSÕES
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior pressão: "
-
-            f"{maior_pressao:.3f} bar"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMenor pressão: "
-
-            f"{menor_pressao:.3f} bar"
-
-        )
-
-
-# =============================================================================
-# PARTE 379
-# MAIOR TEMPERATURA
-# =============================================================================
-
-        maior_temperatura = max(
-
-            (
-
-                float(r[8])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-
-# =============================================================================
-# PARTE 380
-# MENOR TEMPERATURA
-# =============================================================================
-
-        menor_temperatura = min(
-
-            (
-
-                float(r[8])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior temperatura: "
-
-            f"{maior_temperatura:.2f} °C"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMenor temperatura: "
-
-            f"{menor_temperatura:.2f} °C"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 381
-# MAIOR ALTITUDE
-# =============================================================================
-
-        maior_altitude = max(
-
-            (
-
-                float(r[10])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-# =============================================================================
-# PARTE 382
-# MENOR ALTITUDE
-# =============================================================================
-
-        menor_altitude = min(
-
-            (
-
-                float(r[10])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-
-# =============================================================================
-# PARTE 383
-# MÉDIA ALTITUDE
-# =============================================================================
-
-        if registros:
-
-            media_altitude = sum(
-
-                float(r[10])
-
-                for r in registros
-
-            ) / len(
-
-                registros
-
-            )
-
-        else:
-
-            media_altitude = 0
-
-
-
-# =============================================================================
-# PARTE 384
-# EXIBE ALTITUDE
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior altitude: "
-
-            f"{maior_altitude:.2f} m"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMenor altitude: "
-
-            f"{menor_altitude:.2f} m"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nAltitude média: "
-
-            f"{media_altitude:.2f} m"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 385
-# FIM DO BLOCO ALTITUDE
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n--------------------------------------------"
-
-        )
-
-
-# =============================================================================
-# PARTE 386
-# MAIOR VALOR POR M³
-# =============================================================================
-
-        maior_valor_m3 = max(
-
-            (
-
-                float(r[6])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-
-# =============================================================================
-# PARTE 387
-# MENOR VALOR POR M³
-# =============================================================================
-
-        menor_valor_m3 = min(
-
-            (
-
-                float(r[6])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-# =============================================================================
-# PARTE 388
-# MÉDIA DO PREÇO DO M³
-# =============================================================================
-
-        if registros:
-
-            media_valor_m3 = sum(
-
-                float(r[6])
-
-                for r in registros
-
-            ) / len(
-
-                registros
-
-            )
-
-        else:
-
-            media_valor_m3 = 0
-
-
-# =============================================================================
-# PARTE 389
-# EXIBIR PREÇOS
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior preço do m³: "
-
-            f"R$ {maior_valor_m3:.3f}"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMenor preço do m³: "
-
-            f"R$ {menor_valor_m3:.3f}"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nPreço médio do m³: "
-
-            f"R$ {media_valor_m3:.3f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 390
-# SEPARADOR
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n============================================"
-
-        )
-
-# =============================================================================
-# PARTE 391
-# MAIOR VALOR TOTAL
-# =============================================================================
-
-        maior_valor_total = max(
-
-            (
-
-                float(r[7])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-# =============================================================================
-# PARTE 392
-# MENOR VALOR TOTAL
-# =============================================================================
-
-        menor_valor_total = min(
-
-            (
-
-                float(r[7])
-
-                for r in registros
-
-            ),
-
-            default=0
-
-        )
-
-
-# =============================================================================
-# PARTE 393
-# DIFERENÇA
-# =============================================================================
-
-        diferenca = (
-
-            maior_valor_total -
-
-            menor_valor_total
-
-        )
-
-
-# =============================================================================
-# PARTE 394
-# EXIBIR VALORES
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMaior valor pago: R$ {maior_valor_total:.2f}"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nMenor valor pago: R$ {menor_valor_total:.2f}"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nDiferença: R$ {diferenca:.2f}"
-
-        )
-
-
-# =============================================================================
-# PARTE 395
-# SEPARADOR
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n--------------------------------------------"
-
-        )
-
-
-# =============================================================================
-# PARTE 396
-# PRIMEIRO ABASTECIMENTO
-# =============================================================================
-
-        if registros:
-
-            primeira_data = registros[0][1]
-
-        else:
-
-            primeira_data = "-"
-
-
-
-# =============================================================================
-# PARTE 397
-# ÚLTIMO ABASTECIMENTO
-# =============================================================================
-
-        if registros:
-
-            ultima_data = registros[-1][1]
-
-        else:
-
-            ultima_data = "-"
-
-
-# =============================================================================
-# PARTE 398
-# EXIBIR PERÍODO
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nPrimeiro abastecimento: {primeira_data}"
-
-        )
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            f"\nÚltimo abastecimento: {ultima_data}"
-
-        )
-
-
-# =============================================================================
-# PARTE 399
-# MENSAGEM FINAL
-# =============================================================================
-
-        self.texto_estatisticas.insert(
-
-            tk.END,
-
-            "\n\nRelatório estatístico concluído com sucesso."
-
-        )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# =============================================================================
-# PARTE 400
-# FIM DO MÓDULO ESTATÍSTICAS
-# =============================================================================
-
-        return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# =============================================================================
-# PARTE 171
-# NOVO ABASTECIMENTO
-# =============================================================================
 
     def novo_abastecimento(self):
 
@@ -11503,7 +9097,7 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
         self.status.set(
 
-            "Abastecimento salvo e comparação física calculada."
+            "Abastecimento salvo e análise concluída."
 
         )
 
@@ -13771,6 +11365,7 @@ if __name__ == "__main__":
 # - elimina repetição do relatório de análise física nas estatísticas
 # - grava metragem cúbica teórica no SQLite
 # - adiciona metragem cúbica teórica na visualização do SQLite
+
 
 
 
