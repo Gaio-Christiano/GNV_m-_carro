@@ -4605,7 +4605,10 @@ class BancoGNV:
 
                 pressao_final = ?,
 
-                densidade_informada_kg_m3 = ?
+                densidade_informada_kg_m3 = ?,
+                metragem_teorica_m3 = ?,
+                metragem_anp_m3 = ?,
+                metragem_cientifica_m3 = ?
 
             WHERE id = ?
 
@@ -5093,6 +5096,13 @@ class RelatorioPDF(FPDF):
 
         )
 
+def numero_sqlite(valor, casas=2):
+    try:
+        return formatar_numero_br(float(valor), casas)
+    except (TypeError, ValueError):
+        return "-"
+
+
 class InterfaceGNV:
 
     """
@@ -5121,10 +5131,8 @@ class InterfaceGNV:
 
         )
 
-        self.janela.minsize(
-            900,
-            600
-        )
+        # A janela menor continua utilizável; áreas de dados possuem rolagem.
+        self.janela.minsize(760, 500)
 
 
 
@@ -5854,29 +5862,16 @@ class InterfaceGNV:
             sticky="nsew"
         )
 
-        self.scroll_resultados = ttk.Scrollbar(
-            self.frame_resultados,
-            orient="vertical"
-        )
-        self.scroll_resultados.pack(
-            side="right",
-            fill="y"
-        )
-
-        self.texto_resultados = tk.Text(
-            self.frame_resultados,
-            font=("Consolas", 10),
-            wrap="none",
-            yscrollcommand=self.scroll_resultados.set
-        )
-        self.texto_resultados.pack(
-            side="left",
-            fill="both",
-            expand=True
-        )
-        self.scroll_resultados.config(
-            command=self.texto_resultados.yview
-        )
+        self.scroll_resultados_y = ttk.Scrollbar(self.frame_resultados, orient="vertical")
+        self.scroll_resultados_y.pack(side="right", fill="y")
+        self.scroll_resultados_x = ttk.Scrollbar(self.frame_resultados, orient="horizontal")
+        self.scroll_resultados_x.pack(side="bottom", fill="x")
+        self.texto_resultados = tk.Text(self.frame_resultados, font=("Consolas", 10), wrap="none", yscrollcommand=self.scroll_resultados_y.set, xscrollcommand=self.scroll_resultados_x.set)
+        self.texto_resultados.pack(side="left", fill="both", expand=True)
+        self.scroll_resultados_y.config(command=self.texto_resultados.yview)
+        self.scroll_resultados_x.config(command=self.texto_resultados.xview)
+        self.texto_resultados.tag_configure("linha_par", background="#ffffff")
+        self.texto_resultados.tag_configure("linha_impar", background="#f3f3f3")
 
         self.frame_calculos.grid_rowconfigure(
             9,
@@ -6156,22 +6151,23 @@ class InterfaceGNV:
             "Metragem ANP (m³)",
             "Metragem científica (m³)"
         )
-        self.tree_sqlite = ttk.Treeview(
-            self.frame_sqlite,
-            columns=colunas_sqlite,
-            show="headings"
-        )
+        frame_tree_sqlite = ttk.Frame(self.frame_sqlite)
+        frame_tree_sqlite.pack(fill="both", expand=True, padx=5, pady=5)
+        frame_tree_sqlite.grid_rowconfigure(0, weight=1)
+        frame_tree_sqlite.grid_columnconfigure(0, weight=1)
+        self.tree_sqlite = ttk.Treeview(frame_tree_sqlite, columns=colunas_sqlite, show="headings")
+        self.tree_sqlite.tag_configure("linha_par", background="#ffffff")
+        self.tree_sqlite.tag_configure("linha_impar", background="#f3f3f3")
         for coluna in colunas_sqlite:
             self.tree_sqlite.heading(coluna, text=coluna)
-            self.tree_sqlite.column(coluna, width=110, anchor="center")
-        self.tree_sqlite.pack(side="left", fill="both", expand=True)
-        scrollbar_sqlite = ttk.Scrollbar(
-            self.frame_sqlite,
-            orient="vertical",
-            command=self.tree_sqlite.yview
-        )
-        scrollbar_sqlite.pack(side="right", fill="y")
-        self.tree_sqlite.configure(yscrollcommand=scrollbar_sqlite.set)
+            largura = 145 if ("Metragem" in coluna or coluna in ("Odômetro", "Valor total")) else 125
+            self.tree_sqlite.column(coluna, width=largura, minwidth=80, anchor="center")
+        self.tree_sqlite.grid(row=0, column=0, sticky="nsew")
+        scrollbar_sqlite_y = ttk.Scrollbar(frame_tree_sqlite, orient="vertical", command=self.tree_sqlite.yview)
+        scrollbar_sqlite_y.grid(row=0, column=1, sticky="ns")
+        scrollbar_sqlite_x = ttk.Scrollbar(frame_tree_sqlite, orient="horizontal", command=self.tree_sqlite.xview)
+        scrollbar_sqlite_x.grid(row=1, column=0, sticky="ew")
+        self.tree_sqlite.configure(yscrollcommand=scrollbar_sqlite_y.set, xscrollcommand=scrollbar_sqlite_x.set)
 
 # =============================================================================
 # ABA EXCEL
@@ -6232,7 +6228,7 @@ class InterfaceGNV:
         self.combo_tipo_grafico = ttk.Combobox(
             frame_controles_graficos,
             textvariable=self.tipo_grafico,
-            values=("Gasto por posto", "Volume por posto", "Abastecimentos por posto", "Evolução do volume", "Km por m³", "Bomba × teórico"),
+            values=("Gasto por posto", "Volume por posto", "Abastecimentos por posto", "Evolução do volume", "Km por m³", "Bomba × teórico (linhas)"),
             state="readonly", width=28
         )
         self.combo_tipo_grafico.pack(side="left", padx=5)
@@ -6315,29 +6311,11 @@ class InterfaceGNV:
             pady=(0, 8)
         )
 
-        self.scroll_formulas = ttk.Scrollbar(
-            self.frame_formulas,
-            orient="vertical"
-        )
-        self.scroll_formulas.pack(
-            side="right",
-            fill="y"
-        )
-
-        self.texto_formulas = tk.Text(
-            self.frame_formulas,
-            wrap="word",
-            font=("Segoe UI", 10),
-            yscrollcommand=self.scroll_formulas.set
-        )
-        self.texto_formulas.pack(
-            side="left",
-            fill="both",
-            expand=True
-        )
-        self.scroll_formulas.config(
-            command=self.texto_formulas.yview
-        )
+        self.scroll_formulas = ttk.Scrollbar(self.frame_formulas,orient="vertical"); self.scroll_formulas.pack(side="right",fill="y")
+        self.scroll_formulas_x = ttk.Scrollbar(self.frame_formulas,orient="horizontal"); self.scroll_formulas_x.pack(side="bottom",fill="x")
+        self.texto_formulas = tk.Text(self.frame_formulas,wrap="none",font=("Segoe UI",10),yscrollcommand=self.scroll_formulas.set,xscrollcommand=self.scroll_formulas_x.set)
+        self.texto_formulas.pack(side="left",fill="both",expand=True)
+        self.scroll_formulas.config(command=self.texto_formulas.yview); self.scroll_formulas_x.config(command=self.texto_formulas.xview)
 
         texto_formulas = """FÓRMULAS E FÍSICA DO SISTEMA DE CÁLCULO DE GNV
 ============================================================
@@ -6798,11 +6776,15 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
         frame_anp_botoes = ttk.Frame(frame_anp)
         frame_anp_botoes.grid(row=5, column=0, columnspan=4, sticky="ew", pady=8)
 
-        texto_anp = tk.Text(frame_anp, wrap="word", font=("Consolas", 10), height=24)
-        scroll_anp = ttk.Scrollbar(frame_anp, orient="vertical", command=texto_anp.yview)
-        texto_anp.configure(yscrollcommand=scroll_anp.set)
+        texto_anp = tk.Text(frame_anp, wrap="none", font=("Consolas", 10), height=24)
+        scroll_anp_y = ttk.Scrollbar(frame_anp, orient="vertical", command=texto_anp.yview)
+        scroll_anp_x = ttk.Scrollbar(frame_anp, orient="horizontal", command=texto_anp.xview)
+        texto_anp.configure(yscrollcommand=scroll_anp_y.set, xscrollcommand=scroll_anp_x.set)
         texto_anp.grid(row=6, column=0, columnspan=3, sticky="nsew", padx=(0, 5))
-        scroll_anp.grid(row=6, column=3, sticky="ns")
+        scroll_anp_y.grid(row=6, column=3, sticky="ns")
+        scroll_anp_x.grid(row=7, column=0, columnspan=3, sticky="ew")
+        texto_anp.tag_configure("linha_par", background="#ffffff")
+        texto_anp.tag_configure("linha_impar", background="#f3f3f3")
         frame_anp.grid_columnconfigure(2, weight=1)
         frame_anp.grid_rowconfigure(6, weight=1)
 
@@ -6901,6 +6883,7 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
                 texto_anp.delete("1.0", "end")
                 texto_anp.insert(tk.END, "\n".join(linhas))
+                self.aplicar_listras_texto(texto_anp)
                 texto_anp.see("1.0")
 
             except (ValueError, ZeroDivisionError) as e:
@@ -6954,179 +6937,26 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 # TREEVIEW
 # =============================================================================
 
-        self.tree = ttk.Treeview(
+        frame_tree_historico = ttk.Frame(self.frame_historico)
+        frame_tree_historico.pack(fill="both", expand=True)
+        frame_tree_historico.grid_rowconfigure(0, weight=1)
+        frame_tree_historico.grid_columnconfigure(0, weight=1)
+        colunas_historico = ("data","posto","cidade","odometro","distancia","volume","km_m3","teorico","diferenca","valor")
+        self.tree = ttk.Treeview(frame_tree_historico, columns=colunas_historico, show="headings")
+        self.tree.tag_configure("linha_par", background="#ffffff")
+        self.tree.tag_configure("linha_impar", background="#f3f3f3")
+        cabecalhos = {"data":"Data","posto":"Posto","cidade":"Cidade","odometro":"Odômetro (km)","distancia":"Distância (km)","volume":"Bomba (m³)","km_m3":"Consumo (km/m³)","teorico":"Teórico (m³)","diferenca":"Bomba − teórico","valor":"Valor (R$)"}
+        larguras = {"data":120,"posto":220,"cidade":160,"odometro":120,"distancia":125,"volume":110,"km_m3":135,"teorico":120,"diferenca":140,"valor":120}
+        for coluna in colunas_historico:
+            self.tree.heading(coluna, text=cabecalhos[coluna])
+            self.tree.column(coluna, width=larguras[coluna], minwidth=85, anchor="center")
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        self.scroll_historico = ttk.Scrollbar(frame_tree_historico, orient="vertical", command=self.tree.yview)
+        self.scroll_historico.grid(row=0, column=1, sticky="ns")
+        self.scroll_historico_x = ttk.Scrollbar(frame_tree_historico, orient="horizontal", command=self.tree.xview)
+        self.scroll_historico_x.grid(row=1, column=0, sticky="ew")
+        self.tree.configure(yscrollcommand=self.scroll_historico.set, xscrollcommand=self.scroll_historico_x.set)
 
-            self.frame_historico,
-
-            columns=(
-
-                "data",
-
-                "posto",
-
-                "cidade",
-
-                "volume",
-
-                "teorico",
-
-                "valor"
-
-            ),
-
-            show="headings"
-
-        )
-
-
-# =============================================================================
-# PARTE 185
-# CABEÇALHOS
-# =============================================================================
-
-        self.tree.heading(
-
-            "data",
-
-            text="Data"
-
-        )
-
-        self.tree.heading(
-
-            "posto",
-
-            text="Posto"
-
-        )
-
-        self.tree.heading(
-
-            "cidade",
-
-            text="Cidade"
-
-        )
-
-        self.tree.heading(
-
-            "volume",
-
-            text="Volume"
-
-        )
-
-        self.tree.heading(
-
-            "teorico",
-
-            text="Teórico m³"
-
-        )
-
-        self.tree.heading(
-
-            "valor",
-
-            text="Valor"
-
-        )
-
-
-# =============================================================================
-# PARTE 191
-# LARGURA DAS COLUNAS
-# =============================================================================
-
-        self.tree.column(
-
-            "data",
-
-            width=120
-
-        )
-
-        self.tree.column(
-
-            "posto",
-
-            width=260
-
-        )
-
-        self.tree.column(
-
-            "cidade",
-
-            width=180
-
-        )
-
-        self.tree.column(
-
-            "volume",
-
-            width=100,
-
-            anchor="center"
-
-        )
-
-        self.tree.column(
-
-            "valor",
-
-            width=120,
-
-            anchor="e"
-
-        )
-
-
-# =============================================================================
-# PARTE 186
-# EXIBIR TREEVIEW
-# =============================================================================
-
-        self.tree.pack(
-
-            fill="both",
-
-            expand=True
-
-        )
-
-
-# =============================================================================
-# PARTE 187
-# SCROLLBAR DO HISTÓRICO
-# =============================================================================
-
-        self.scroll_historico = ttk.Scrollbar(
-
-            self.frame_historico,
-
-            orient="vertical",
-
-            command=self.tree.yview
-
-        )
-
-        self.tree.configure(
-
-            yscrollcommand=self.scroll_historico.set
-
-        )
-
-        self.scroll_historico.pack(
-
-            side="right",
-
-            fill="y"
-
-        )
-
-# =============================================================================
 # =============================================================================
 # PARTE 197
 # TOTAL DE REGISTROS
@@ -7150,13 +6980,8 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
         )
 
-        self.label_total.pack(
-
-            anchor="e",
-
-            pady=5
-
-        )
+        self.label_total.pack(anchor="e",pady=5)
+        ttk.Label(self.frame_historico,text="Consumo = distância entre odômetros válidos ÷ volume abastecido pela bomba.",foreground="#555555").pack(anchor="w",padx=4,pady=(0,4))
 
         self.atualizar_historico()
 
@@ -7378,8 +7203,6 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
             fill="y"
         )
 
-
-
 # =============================================================================
 # PARTE 258
 # BOTÃO ATUALIZAR
@@ -7395,11 +7218,8 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 
         )
 
-        self.botao_atualizar_estatisticas.pack(
+        self.botao_atualizar_estatisticas.pack(pady=10)
 
-            pady=10
-
-        )
 
 
 # =============================================================================
@@ -7639,6 +7459,7 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 # =============================================================================
 
         self.janela.update_idletasks()
+        self.janela.bind("<Configure>", self._ajustar_interface_ao_redimensionar)
 
 # =============================================================================
 # PARTE 496
@@ -7758,6 +7579,14 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 # PARTE 505
 # ATUALIZAR INTERFACE
 # =============================================================================
+
+    def _ajustar_interface_ao_redimensionar(self,_event=None):
+        try:
+            if hasattr(self,"status") and self.janela.winfo_width()<1050:
+                self.status.set("Janela reduzida: use as barras de rolagem para ver todas as informações.")
+        except tk.TclError:
+            pass
+
 
     def selecionar_arquivo_excel(self):
         arquivo = filedialog.askopenfilename(
@@ -7917,68 +7746,58 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
                     self.canvas_grafico.create_text(x, y + 12, text=data[:10], anchor="n", font=("Arial", 8))
                     self.canvas_grafico.create_text(x, y - 12, text=numero(valor, 2), anchor="s", font=("Arial", 8, "bold"))
 
-        elif tipo == "Bomba × teórico":
-            eixos("Volume marcado pela bomba × volume científico", "m³")
-            aw, ah = x1 - x0, y0 - y1
-            pontos = []
-            for i, r in enumerate(registros[-25:]):
+        elif tipo == "Bomba × teórico (linhas)":
+            eixos("Cada abastecimento — bomba × volume teórico", "m³")
+            pontos=[]
+            for i,r in enumerate(registros,start=1):
                 try:
-                    bomba = float(r[5] or 0.0)
-                    teorico = float(r[18] or 0.0) if len(r) > 18 else 0.0
-                    if teorico > 0:
-                        pontos.append((i + 1, bomba, teorico))
-                except (TypeError, ValueError):
-                    continue
+                    bomba=float(r[5] or 0.0); teorico=float(r[16] or 0.0)
+                    if teorico<=0 and len(r)>18: teorico=float(r[18] or 0.0)
+                    if bomba>0 and teorico>0: pontos.append((i,bomba,teorico,str(r[1] or "")))
+                except (TypeError,ValueError,IndexError): continue
+            pontos=pontos[-40:]
             if not pontos:
-                self.canvas_grafico.create_text((x0+x1)/2, (y0+y1)/2, text="Nenhum volume teórico disponível.", font=("Arial", 11))
-                return
-            maximo = max(max(p[1], p[2]) for p in pontos) or 1.0
+                self.canvas_grafico.create_text((x0+x1)/2,(y0+y1)/2,text="Nenhum abastecimento com bomba e teórico disponíveis.",font=("Arial",11)); return
+            maximo=max(max(p[1],p[2]) for p in pontos) or 1.0; aw,ah=x1-x0,y0-y1
             for i in range(6):
-                valor = maximo * i / 5
-                y = y0 - ah * i / 5
-                self.canvas_grafico.create_line(x0, y, x1, y)
-                self.canvas_grafico.create_text(x0-8, y, text=numero(valor, 1), anchor="e", font=("Arial", 8))
-            passo = aw / max(len(pontos), 1)
-            for idx, bomba, teorico in pontos:
-                cx = x0 + passo * (idx - 0.5)
-                hb = ah * bomba / maximo
-                ht = ah * teorico / maximo
-                bw = min(30, passo * .30)
-                self.canvas_grafico.create_rectangle(cx-bw-2, y0-hb, cx-2, y0, fill="#5b8ff9")
-                self.canvas_grafico.create_rectangle(cx+2, y0-ht, cx+bw+2, y0, fill="#59a14f")
-                self.canvas_grafico.create_text(cx, y0+12, text=str(idx), anchor="n", font=("Arial", 8))
-            self.canvas_grafico.create_text(x1-150, y1+5, text="Azul = bomba | Verde = científico", anchor="w", font=("Arial", 9))
+                valor=maximo*i/5; y=y0-ah*i/5
+                self.canvas_grafico.create_line(x0,y,x1,y,fill="#dddddd")
+                self.canvas_grafico.create_text(x0-8,y,text=numero(valor,2),anchor="e",font=("Arial",8))
+            def cx(pos): return (x0+x1)/2 if len(pontos)==1 else x0+aw*pos/(len(pontos)-1)
+            def cy(v): return y0-ah*v/maximo
+            pb=[];pt=[]
+            for pos,(_,b,t,_) in enumerate(pontos):
+                x=cx(pos); pb.append((x,cy(b))); pt.append((x,cy(t)))
+            self.canvas_grafico.create_line(*[v for pt0 in pb for v in pt0],width=3,fill="#2f6fed")
+            self.canvas_grafico.create_line(*[v for pt0 in pt for v in pt0],width=3,fill="#4a9f5b")
+            for pos,(num_reg,b,t,data) in enumerate(pontos):
+                xb,yb=pb[pos]; xt,yt=pt[pos]
+                self.canvas_grafico.create_oval(xb-4,yb-4,xb+4,yb+4,fill="#2f6fed",outline="#1e4b9c")
+                self.canvas_grafico.create_oval(xt-4,yt-4,xt+4,yt+4,fill="#4a9f5b",outline="#2e6b39")
+                if pos==0 or pos==len(pontos)-1 or len(pontos)<=12:
+                    self.canvas_grafico.create_text(xb,y0+12,text=str(num_reg),anchor="n",font=("Arial",8))
+            self.canvas_grafico.create_text(x1-260,y1+5,text="Azul = bomba | Verde = teórico",anchor="w",font=("Arial",9,"bold"))
 
-        else:  # Evolução do volume
-            pontos = []
-            for r in registros:
-                try:
-                    pontos.append((str(r[1] or ""), float(r[5] or 0.0)))
-                except (TypeError, ValueError):
-                    continue
-            pontos = pontos[-30:]
-            eixos("Evolução dos últimos abastecimentos", "m³")
-            if not pontos:
-                return
-            maximo = max(v for _, v in pontos) or 1.0
-            aw, ah = x1 - x0, y0 - y1
-            for i in range(6):
-                valor = maximo * i / 5
-                y = y0 - ah * i / 5
-                self.canvas_grafico.create_line(x0, y, x1, y)
-                self.canvas_grafico.create_text(x0 - 8, y, text=numero(valor, 1), anchor="e", font=("Arial", 8))
-            coords = []
-            for i, (data, valor) in enumerate(pontos):
-                x = x0 if len(pontos) == 1 else x0 + aw * i / (len(pontos) - 1)
-                y = y0 - ah * valor / maximo
-                coords.append((x, y))
-            for a, b in zip(coords, coords[1:]):
-                self.canvas_grafico.create_line(a[0], a[1], b[0], b[1], width=3)
-            for i, ((data, valor), (x, y)) in enumerate(zip(pontos, coords)):
-                self.canvas_grafico.create_oval(x-4, y-4, x+4, y+4, fill="#d95f02", outline="#8c3d00")
-                if i == 0 or i == len(coords)-1 or len(coords) <= 8:
-                    self.canvas_grafico.create_text(x, y+12, text=data[:10], anchor="n", font=("Arial", 8))
-                    self.canvas_grafico.create_text(x, y-12, text=numero(valor, 2), anchor="s", font=("Arial", 8, "bold"))
+    def atualizar_sqlite(self):
+        """Atualiza a grade SQLite com rolagem horizontal/vertical."""
+        for item in self.tree_sqlite.get_children(): self.tree_sqlite.delete(item)
+        registros=self.banco.listar_abastecimentos()
+        for indice,r in enumerate(registros):
+            vals=(r[0],r[1],r[2],r[3],numero_sqlite(r[4],1),numero_sqlite(r[5],3),numero_sqlite(r[6],3),numero_sqlite(r[7],2),numero_sqlite(r[8],2),numero_sqlite(r[9],2),numero_sqlite(r[10],1),numero_sqlite(r[12],2),numero_sqlite(r[13],2),numero_sqlite(r[14],2),numero_sqlite(r[15],3),numero_sqlite(r[16],3),numero_sqlite(r[17],3),numero_sqlite(r[18],3))
+            self.tree_sqlite.insert("","end",values=vals,tags=("linha_par" if indice%2==0 else "linha_impar",))
+        self.status.set(f"{len(registros)} registros exibidos no Banco SQLite.")
+
+    def aplicar_listras_texto(self, widget):
+        """Alterna fundo branco/cinza claro linha a linha em relatórios."""
+        widget.tag_configure("linha_par", background="#ffffff")
+        widget.tag_configure("linha_impar", background="#f3f3f3")
+        try:
+            ultima = int(widget.index("end-1c").split(".")[0])
+        except Exception:
+            return
+        for linha in range(1, ultima + 1):
+            widget.tag_add("linha_par" if linha % 2 else "linha_impar", f"{linha}.0", f"{linha}.end")
+
 
     def aplicar_idioma(self):
         """Atualiza nomes das abas e título principal conforme o idioma selecionado."""
@@ -8729,6 +8548,8 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
             "\n" + "=" * 70 + "\n"
         )
 
+        self.aplicar_listras_texto(self.texto_resultados)
+
 
 
 
@@ -9129,88 +8950,29 @@ https://www.nist.gov/publications/comparison-five-natural-gas-equations-state-us
 # =============================================================================
 
     def atualizar_historico(self):
-
-        for item in self.tree.get_children():
-
-            self.tree.delete(
-
-                item
-
-            )
-
-        registros = self.banco.listar_abastecimentos()
-
-        for registro in registros:
-
-            self.tree.insert(
-
-                "",
-
-                "end",
-
-                values=(
-
-                    registro[1],
-
-                    registro[2],
-
-                    registro[3],
-
-                    registro[5],
-
-                    (
-                        float(registro[18] or 0)
-                        if len(registro) > 18 and float(registro[18] or 0) > 0
-                        else (
-                            calcular_comparacao_abastecimento(
-                                float(registro[12] or 0),
-                                float(registro[13] or 0),
-                                float(registro[14] or 0),
-                                float(registro[8] or 20),
-                                float(registro[10] or 0),
-                                converter_numero(self.entry_fator_z.get()) if hasattr(self, "entry_fator_z") else 0.92,
-                                converter_numero(self.entry_massa_molar.get()) if hasattr(self, "entry_massa_molar") else 0.01604
-                            )["volume_teorico_m3"]
-                            if len(registro) > 14 and float(registro[12] or 0) > 0
-                            else "-"
-                        )
-                    ),
-
-                    registro[7]
-
-                )
-
-            )
-
-# =============================================================================
-# PARTE 198
-# ATUALIZA TOTAL
-# =============================================================================
-
-        self.label_total.configure(
-
-            text=f"Total: {len(registros)} registros"
-
-        )
-
-
-
-# =============================================================================
-# PARTE 221
-# STATUS
-# =============================================================================
-
-        self.status.set(
-
-            f"{len(registros)} registros carregados."
-
-        )
-
-
-# =============================================================================
-# PARTE 223
-# EXPORTAR EXCEL
-# =============================================================================
+        """Atualiza histórico, distância percorrida e consumo em km/m³."""
+        for item in self.tree.get_children(): self.tree.delete(item)
+        registros=self.banco.listar_abastecimentos(); anterior=None
+        for indice,r in enumerate(registros):
+            try: odo=float(r[4] or 0.0)
+            except (TypeError,ValueError): odo=0.0
+            try: vol=float(r[5] or 0.0)
+            except (TypeError,ValueError): vol=0.0
+            distancia=None; consumo=None
+            if anterior is not None and odo>anterior:
+                distancia=odo-anterior
+                if vol>0: consumo=distancia/vol
+            if odo>0: anterior=odo
+            try: teorico=float(r[16] or 0.0)
+            except (TypeError,ValueError,IndexError): teorico=0.0
+            if teorico<=0 and len(r)>18:
+                try: teorico=float(r[18] or 0.0)
+                except (TypeError,ValueError): teorico=0.0
+            dif=vol-teorico if teorico>0 else None
+            vals=(r[1],r[2],r[3],numero_sqlite(odo,1) if odo>0 else "-",numero_sqlite(distancia,1) if distancia is not None else "-",numero_sqlite(vol,3),numero_sqlite(consumo,2) if consumo is not None else "-",numero_sqlite(teorico,3) if teorico>0 else "-",numero_sqlite(dif,3) if dif is not None else "-","R$ "+numero_sqlite(r[7],2))
+            self.tree.insert("","end",values=vals,tags=("linha_par" if indice%2==0 else "linha_impar",))
+        self.label_total.configure(text=f"Total: {len(registros)} registros")
+        self.status.set(f"{len(registros)} registros carregados.")
 
     def exportar_excel(self):
 
@@ -11365,6 +11127,7 @@ if __name__ == "__main__":
 # - elimina repetição do relatório de análise física nas estatísticas
 # - grava metragem cúbica teórica no SQLite
 # - adiciona metragem cúbica teórica na visualização do SQLite
+
 
 
 
