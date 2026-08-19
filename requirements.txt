@@ -1,0 +1,4 @@
+kivy
+openpyxl
+fpdf2
+pillow
