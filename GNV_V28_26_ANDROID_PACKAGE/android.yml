@@ -11,21 +11,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get update -y || true
+          sudo apt-get install -y --no-install-recommends \
             build-essential \
             git \
-            ffmpeg \
-            libsm6 \
-            libxext6 \
-            libkivy-dev \
             python3-pip \
             python3-setuptools \
             python3-dev \
@@ -58,4 +54,5 @@ jobs:
           name: GNV-V28.26-APK
           path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
           if-no-files-found: error
+
           
