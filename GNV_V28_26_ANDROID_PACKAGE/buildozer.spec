@@ -7,7 +7,7 @@ package.domain = br.com.gaiochristiano
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,json,csv,txt,kv
 version = 28.26
-requirements = python3==3.12.9,kivy,openpyxl,fpdf2,pillow
+requirements = python3,kivy,openpyxl,fpdf2,pillow
 orientation = portrait
 fullscreen = 0
 android.api = 35
