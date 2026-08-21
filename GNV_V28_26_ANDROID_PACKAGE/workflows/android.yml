@@ -2,33 +2,127 @@ name: Build APK Android - GNV V28.26
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'main.py'
-      - 'buildozer.spec'
-      - 'requirements.txt'
-      - '.github/workflows/android.yml'
 
 jobs:
   build:
+    name: Compilar APK GNV V28.26
     runs-on: ubuntu-22.04
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Build APK with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
+      # ============================================================
+      # 1. BAIXAR O CÓDIGO DO REPOSITÓRIO
+      # ============================================================
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # ============================================================
+      # 2. PYTHON EXATO UTILIZADO NO BUILD
+      # ============================================================
+      - name: Set up Python 3.12.9
+        uses: actions/setup-python@v6
         with:
-          workdir: .
-          buildozer_version: master
-          command: buildozer -v android debug
+          python-version: '3.12.9'
+          cache: 'pip'
 
+      # ============================================================
+      # 3. CONFERIR VERSÕES
+      # ============================================================
+      - name: Verify Python
+        run: |
+          python --version
+          python -m pip --version
+
+      # ============================================================
+      # 4. DEPENDÊNCIAS DO LINUX
+      # ============================================================
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            python3-dev \
+            autoconf \
+            automake \
+            autopoint \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libffi-dev \
+            libssl-dev \
+            libltdl-dev \
+            cmake \
+            ccache \
+            lbzip2 \
+            wget \
+            patch
+
+      # ============================================================
+      # 5. ATUALIZAR PIP / SETUPTOOLS
+      # ============================================================
+      - name: Upgrade Python build tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+
+      # ============================================================
+      # 6. BUILDOZER + CYTHON
+      # ============================================================
+      - name: Install Buildozer and Cython
+        run: |
+          python -m pip install buildozer
+          python -m pip install "Cython==0.29.33"
+
+      # ============================================================
+      # 7. CONFERIR BUILDOZER E CYTHON
+      # ============================================================
+      - name: Verify Buildozer
+        run: |
+          buildozer --version
+          cython --version
+
+      # ============================================================
+      # 8. TESTAR O PYTHON DO PROJETO
+      # ============================================================
+      - name: Check Python source
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: |
+          python -m py_compile main.py
+          echo "main.py compilou corretamente."
+
+      # ============================================================
+      # 9. COMPILAR APK
+      # ============================================================
+      - name: Build APK
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: |
+          buildozer -v android debug
+
+      # ============================================================
+      # 10. MOSTRAR ARQUIVOS GERADOS
+      # ============================================================
+      - name: List generated files
+        if: always()
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: |
+          echo "===== CONTEUDO DA PASTA BIN ====="
+          ls -lah bin || true
+
+      # ============================================================
+      # 11. ENVIAR APK PARA ARTIFACTS
+      # ============================================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GNV-V28.26-APK
-          path: bin/*.apk
+          path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
           if-no-files-found: error
+          
 
           
