@@ -2,57 +2,32 @@ name: Build APK Android - GNV V28.26
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'main.py'
+      - 'buildozer.spec'
+      - 'requirements.txt'
+      - '.github/workflows/android.yml'
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -y || true
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            git \
-            python3-pip \
-            python3-setuptools \
-            python3-dev \
-            openjdk-17-jdk \
-            zip \
-            unzip \
-            autoconf \
-            libtool \
-            pkg-config \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            libffi-dev \
-            libssl-dev \
-            ccache
-
-      - name: Install Buildozer & Cython
-        run: |
-          pip install --upgrade pip setuptools
-          pip install buildozer cython==0.29.33
-
       - name: Build APK with Buildozer
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-        run: |
-          buildozer -v android debug
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          workdir: .
+          buildozer_version: master
+          command: buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GNV-V28.26-APK
-          path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
+          path: bin/*.apk
           if-no-files-found: error
-          
-          
+
