@@ -1,7 +1,7 @@
 [app]
 
 # ============================================================
-# GNV V28.26 - SISTEMA DE CALCULO E ANALISE DE GNV
+# SISTEMA GNV V28.26 - ANDROID
 # ============================================================
 
 title = Sistema de Calculos e Analise da Capacidade do Cilindro de GNV - V28.26
@@ -21,23 +21,11 @@ version = 28.26
 # ============================================================
 # PYTHON
 # ============================================================
-#
-# IMPORTANTE:
-# python3 e hostpython3 precisam ter EXATAMENTE a mesma
-# versao durante o processo de compilacao.
-#
-# O projeto utiliza Python 3.12.9.
-#
-# ============================================================
 
 requirements = python3==3.12.9,hostpython3==3.12.9,kivy,openpyxl,fpdf2,pillow
 
 # ============================================================
 # PYTHON-FOR-ANDROID
-# ============================================================
-#
-# Utilizar a linha MASTER, compativel com Python 3.12.
-#
 # ============================================================
 
 p4a.branch = master
@@ -48,9 +36,11 @@ p4a.branch = master
 
 android.api = 35
 
-android.minapi = 23
+android.minapi = 26
 
-android.ndk = 27c
+android.ndk = 28c
+
+android.ndk_api = 26
 
 android.archs = arm64-v8a,armeabi-v7a
 
@@ -63,7 +53,7 @@ android.allow_backup = True
 android.debug_artifact = apk
 
 # ============================================================
-# ORIENTACAO
+# INTERFACE
 # ============================================================
 
 orientation = portrait
@@ -73,29 +63,22 @@ fullscreen = 0
 # ============================================================
 # ICONE
 # ============================================================
-#
-# Caso exista icon.png de 512x512 na pasta do projeto,
-# descomente a linha abaixo.
+
+# Caso tenha icon.png de 512x512:
 #
 # icon.filename = %(source.dir)s/icon.png
 
 # ============================================================
 # PRESPLASH
 # ============================================================
-#
-# Caso exista presplash.png, descomente:
+
+# Caso tenha presplash.png:
 #
 # presplash.filename = %(source.dir)s/presplash.png
 
 
 [buildozer]
 
-# Nivel de log:
-# 1 = normal
-# 2 = detalhado
-# 3 = muito detalhado
-
 log_level = 2
 
 warn_on_root = 1
-

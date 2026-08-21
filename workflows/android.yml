@@ -14,39 +14,32 @@ jobs:
     steps:
 
       # ==========================================================
-      # 1. BAIXAR O REPOSITORIO
+      # 1 - BAIXAR O REPOSITORIO
       # ==========================================================
 
       - name: Checkout repository
-
         uses: actions/checkout@v6
 
 
       # ==========================================================
-      # 2. CONFIGURAR PYTHON 3.12.9
+      # 2 - PYTHON DO AMBIENTE DE COMPILACAO
       # ==========================================================
 
-      - name: Set up Python 3.12.9
-
+      - name: Setup Python 3.12.9
         uses: actions/setup-python@v6
-
         with:
-
           python-version: '3.12.9'
-
           cache: pip
 
 
       # ==========================================================
-      # 3. VERIFICAR PYTHON DO HOST
+      # 3 - VERIFICAR PYTHON
       # ==========================================================
 
       - name: Verify Python
-
         run: |
-
           echo "=========================================="
-          echo "PYTHON DO HOST"
+          echo "PYTHON"
           echo "=========================================="
 
           python --version
@@ -57,11 +50,10 @@ jobs:
 
 
       # ==========================================================
-      # 4. DEPENDENCIAS DO UBUNTU
+      # 4 - DEPENDENCIAS DO UBUNTU
       # ==========================================================
 
-      - name: Install system dependencies
-
+      - name: Install Linux dependencies
         run: |
 
           sudo apt-get update
@@ -72,7 +64,6 @@ jobs:
             zip \
             unzip \
             openjdk-17-jdk \
-            python3-dev \
             autoconf \
             automake \
             autopoint \
@@ -81,7 +72,6 @@ jobs:
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            libtinfo5 \
             libffi-dev \
             libssl-dev \
             libltdl-dev \
@@ -94,16 +84,11 @@ jobs:
 
 
       # ==========================================================
-      # 5. VERIFICAR JAVA
+      # 5 - JAVA
       # ==========================================================
 
       - name: Verify Java
-
         run: |
-
-          echo "=========================================="
-          echo "JAVA"
-          echo "=========================================="
 
           java -version
 
@@ -111,11 +96,10 @@ jobs:
 
 
       # ==========================================================
-      # 6. ATUALIZAR FERRAMENTAS PYTHON
+      # 6 - FERRAMENTAS PYTHON
       # ==========================================================
 
-      - name: Upgrade Python build tools
-
+      - name: Install Python build tools
         run: |
 
           python -m pip install --upgrade pip
@@ -124,33 +108,30 @@ jobs:
 
 
       # ==========================================================
-      # 7. INSTALAR BUILDOZER
+      # 7 - BUILDOZER
       # ==========================================================
 
       - name: Install Buildozer
-
         run: |
 
           python -m pip install buildozer
 
 
       # ==========================================================
-      # 8. INSTALAR CYTHON COMPATIVEL
+      # 8 - CYTHON
       # ==========================================================
 
       - name: Install Cython
-
         run: |
 
           python -m pip install "Cython==0.29.34"
 
 
       # ==========================================================
-      # 9. VERIFICAR BUILDOZER E CYTHON
+      # 9 - CONFERIR FERRAMENTAS
       # ==========================================================
 
       - name: Verify Build tools
-
         run: |
 
           echo "=========================================="
@@ -167,18 +148,12 @@ jobs:
 
 
       # ==========================================================
-      # 10. VERIFICAR PYTHON DO PROJETO
+      # 10 - TESTAR main.py
       # ==========================================================
 
       - name: Check Python source
-
         working-directory: GNV_V28_26_ANDROID_PACKAGE
-
         run: |
-
-          echo "=========================================="
-          echo "TESTANDO main.py"
-          echo "=========================================="
 
           python -m py_compile main.py
 
@@ -186,35 +161,11 @@ jobs:
 
 
       # ==========================================================
-      # 11. APAGAR BUILD ANTERIOR
-      # ==========================================================
-      #
-      # Isso e importante porque o erro anterior pode ter deixado
-      # componentes compilados em outra versao do Python.
-      #
-      # ==========================================================
-
-      - name: Clean previous Buildozer files
-
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-
-        run: |
-
-          rm -rf .buildozer
-
-          rm -rf bin
-
-          echo "Arquivos antigos de Buildozer removidos."
-
-
-      # ==========================================================
-      # 12. CONFERIR BUILD CONFIGURATION
+      # 11 - CONFERIR BUILDOZER.SPEC
       # ==========================================================
 
       - name: Show Buildozer configuration
-
         working-directory: GNV_V28_26_ANDROID_PACKAGE
-
         run: |
 
           echo "=========================================="
@@ -225,59 +176,62 @@ jobs:
 
 
       # ==========================================================
-      # 13. COMPILAR APK
+      # 12 - LIMPAR COMPILACOES ANTERIORES
+      # ==========================================================
+
+      - name: Clean Buildozer
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: |
+
+          rm -rf .buildozer
+
+          rm -rf bin
+
+          echo "Build anterior removido."
+
+
+      # ==========================================================
+      # 13 - COMPILAR APK
       # ==========================================================
 
       - name: Build APK
-
         working-directory: GNV_V28_26_ANDROID_PACKAGE
-
         run: |
 
           echo "=========================================="
-          echo "INICIANDO COMPILACAO DO APK"
+          echo "INICIANDO BUILD ANDROID"
           echo "=========================================="
 
           buildozer -v android debug
 
 
       # ==========================================================
-      # 14. LISTAR APK GERADO
+      # 14 - MOSTRAR RESULTADO
       # ==========================================================
 
-      - name: List generated files
-
+      - name: List generated APK
         if: always()
-
         working-directory: GNV_V28_26_ANDROID_PACKAGE
-
         run: |
 
           echo "=========================================="
-          echo "ARQUIVOS GERADOS"
+          echo "ARQUIVOS APK"
           echo "=========================================="
-
-          echo "Pasta bin:"
-
-          ls -lah bin || true
-
-          echo ""
-
-          echo "Todos os APK encontrados:"
 
           find . -type f -name "*.apk" -print || true
 
+          echo ""
+
+          ls -lah bin || true
+
 
       # ==========================================================
-      # 15. PUBLICAR APK COMO ARTIFACT
+      # 15 - PUBLICAR APK
       # ==========================================================
 
       - name: Upload APK
-
         if: success()
-
         uses: actions/upload-artifact@v4
-
         with:
 
           name: GNV-V28.26-APK
@@ -285,5 +239,5 @@ jobs:
           path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
 
           if-no-files-found: error
-          
+            
           
