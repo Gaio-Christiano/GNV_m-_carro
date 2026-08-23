@@ -13,55 +13,24 @@ jobs:
 
     steps:
 
-      # ==========================================================
-      # 1 - BAIXAR O REPOSITORIO
-      # ==========================================================
-
       - name: Checkout repository
-
         uses: actions/checkout@v6
 
-
-      # ==========================================================
-      # 2 - PYTHON 3.12.9
-      # ==========================================================
-
       - name: Set up Python 3.12.9
-
         uses: actions/setup-python@v6
-
         with:
-
           python-version: '3.12.9'
-
           cache: 'pip'
 
-
-      # ==========================================================
-      # 3 - VERIFICAR PYTHON
-      # ==========================================================
-
       - name: Verify Python
-
         run: |
-
           python --version
-
           python -c "import sys; print(sys.executable)"
-
           python -m pip --version
 
-
-      # ==========================================================
-      # 4 - DEPENDENCIAS DO UBUNTU
-      # ==========================================================
-
       - name: Install system dependencies
-
         run: |
-
           sudo apt-get update
-
           sudo apt-get install -y \
             build-essential \
             git \
@@ -88,180 +57,60 @@ jobs:
             gcc \
             g++
 
-
-      # ==========================================================
-      # 5 - FERRAMENTAS PYTHON
-      # ==========================================================
-
       - name: Install build tools
-
         run: |
-
-          python -m pip install --upgrade \
-            pip \
-            setuptools \
-            wheel
-
-          python -m pip install \
-            buildozer \
-            "Cython==0.29.33"
-
-
-      # ==========================================================
-      # 6 - VERIFICAR BUILDOZER
-      # ==========================================================
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install buildozer
+          python -m pip install "Cython==0.29.33"
 
       - name: Verify Buildozer
-
         run: |
-
           python --version
-
           buildozer --version
-
           cython --version
 
-
-      # ==========================================================
-      # 7 - VERIFICAR ESTRUTURA DO PROJETO
-      # ==========================================================
-
       - name: Verify project files
-
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-
         run: |
-
-          echo "======================================"
-
-          echo "ARQUIVOS DO PROJETO"
-
-          echo "======================================"
-
+          echo "===== PROJETO ====="
           pwd
-
-          echo ""
-
           ls -lah
-
           echo ""
-
-          echo "======================================"
-
-          echo "BUILDozer SPEC"
-
-          echo "======================================"
-
+          echo "===== BUILDOZER.SPEC ====="
           cat buildozer.spec
 
-
-      # ==========================================================
-      # 8 - VERIFICAR PYTHON DO APLICATIVO
-      # ==========================================================
-
       - name: Check Python source
-
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-
         run: |
-
           python -m py_compile main.py
-
-          echo ""
-
           echo "main.py compilou corretamente."
 
-
-      # ==========================================================
-      # 9 - LIMPAR BUILD ANTERIOR
-      # ==========================================================
-
       - name: Clean Buildozer
-
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-
         run: |
-
           buildozer android clean || true
 
-
-      # ==========================================================
-      # 10 - COMPILAR APK
-      # ==========================================================
-
       - name: Build APK
-
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-
         run: |
-
           buildozer -v android debug
 
-
-      # ==========================================================
-      # 11 - PROCURAR APK
-      # ==========================================================
-
       - name: Find APK
-
         if: always()
-
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-
         run: |
-
-          echo "======================================"
-
-          echo "PROCURANDO APK"
-
-          echo "======================================"
-
+          echo "===== PROCURANDO APK ====="
           find . -type f -name "*.apk" -print
-
           echo ""
-
-          echo "======================================"
-
-          echo "CONTEUDO DA BIN"
-
-          echo "======================================"
-
+          echo "===== BIN ====="
           ls -lah bin || true
 
-
-      # ==========================================================
-      # 12 - GUARDAR LOG DO BUILDOZER
-      # ==========================================================
-
-      - name: Save Buildozer log
-
-        if: always()
-
-        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-
-        run: |
-
-          mkdir -p build_logs
-
-          buildozer -v android debug > build_logs/buildozer_retry.log 2>&1 || true
-
-
-      # ==========================================================
-      # 13 - ENVIAR APK
-      # ==========================================================
-
       - name: Upload APK
-
         if: success()
-
         uses: actions/upload-artifact@v4
-
         with:
-
           name: GNV-V28.27-APK
-
           path: GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
-
           if-no-files-found: error
 
           
