@@ -1,73 +1,267 @@
-name: Build APK Android - GNV V28.27
+name: Build APK GNV V28.27
 
 on:
   workflow_dispatch:
 
 jobs:
+
   build:
+
     name: Compilar APK GNV V28.27
+
     runs-on: ubuntu-22.04
+
     steps:
+
+      # ==========================================================
+      # 1 - BAIXAR O REPOSITORIO
+      # ==========================================================
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+
+        uses: actions/checkout@v6
+
+
+      # ==========================================================
+      # 2 - PYTHON 3.12.9
+      # ==========================================================
 
       - name: Set up Python 3.12.9
-        uses: actions/setup-python@v5
+
+        uses: actions/setup-python@v6
+
         with:
+
           python-version: '3.12.9'
 
+          cache: 'pip'
+
+
+      # ==========================================================
+      # 3 - VERIFICAR PYTHON
+      # ==========================================================
+
+      - name: Verify Python
+
+        run: |
+
+          python --version
+
+          python -c "import sys; print(sys.executable)"
+
+          python -m pip --version
+
+
+      # ==========================================================
+      # 4 - DEPENDENCIAS DO UBUNTU
+      # ==========================================================
+
       - name: Install system dependencies
+
         run: |
+
           sudo apt-get update
-          sudo apt-get install -y build-essential git zip unzip openjdk-17-jdk autoconf automake autopoint libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libffi-dev libssl-dev libltdl-dev cmake ccache lbzip2 wget patch
 
-      - name: Install Buildozer and Cython
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            autoconf \
+            automake \
+            autopoint \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libffi-dev \
+            libssl-dev \
+            libltdl-dev \
+            cmake \
+            ccache \
+            lbzip2 \
+            wget \
+            patch \
+            make \
+            gcc \
+            g++
+
+
+      # ==========================================================
+      # 5 - FERRAMENTAS PYTHON
+      # ==========================================================
+
+      - name: Install build tools
+
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install buildozer
-          python -m pip install "Cython==0.29.33"
 
-      - name: Check source
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-        run: python -m py_compile main.py
+          python -m pip install --upgrade \
+            pip \
+            setuptools \
+            wheel
 
-      - name: Clean old build
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-        run: rm -rf .buildozer bin
+          python -m pip install \
+            buildozer \
+            "Cython==0.29.33"
 
-      - name: Bootstrap python-for-android checkout
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-        run: buildozer android p4a -- --help
 
-      - name: Patch p4a pip bootstrap
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+      # ==========================================================
+      # 6 - VERIFICAR BUILDOZER
+      # ==========================================================
+
+      - name: Verify Buildozer
+
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('.buildozer/android/platform/python-for-android/pythonforandroid/build.py')
-          s = p.read_text(encoding='utf-8')
-          old = "source venv/bin/activate && pip install -U pip"
-          new = "source venv/bin/activate && python -m pip install -U \"pip<26.2\""
-          if old not in s:
-              raise SystemExit('Trecho p4a de atualização do pip não encontrado.')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
-          print('Patch aplicado:', p)
-          PY
+
+          python --version
+
+          buildozer --version
+
+          cython --version
+
+
+      # ==========================================================
+      # 7 - VERIFICAR ESTRUTURA DO PROJETO
+      # ==========================================================
+
+      - name: Verify project files
+
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+
+        run: |
+
+          echo "======================================"
+
+          echo "ARQUIVOS DO PROJETO"
+
+          echo "======================================"
+
+          pwd
+
+          echo ""
+
+          ls -lah
+
+          echo ""
+
+          echo "======================================"
+
+          echo "BUILDozer SPEC"
+
+          echo "======================================"
+
+          cat buildozer.spec
+
+
+      # ==========================================================
+      # 8 - VERIFICAR PYTHON DO APLICATIVO
+      # ==========================================================
+
+      - name: Check Python source
+
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+
+        run: |
+
+          python -m py_compile main.py
+
+          echo ""
+
+          echo "main.py compilou corretamente."
+
+
+      # ==========================================================
+      # 9 - LIMPAR BUILD ANTERIOR
+      # ==========================================================
+
+      - name: Clean Buildozer
+
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+
+        run: |
+
+          buildozer android clean || true
+
+
+      # ==========================================================
+      # 10 - COMPILAR APK
+      # ==========================================================
 
       - name: Build APK
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-        run: buildozer -v android debug
 
-      - name: List APK
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+
+        run: |
+
+          buildozer -v android debug
+
+
+      # ==========================================================
+      # 11 - PROCURAR APK
+      # ==========================================================
+
+      - name: Find APK
+
         if: always()
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-        run: find bin -type f -name '*.apk' -print || true
+
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+
+        run: |
+
+          echo "======================================"
+
+          echo "PROCURANDO APK"
+
+          echo "======================================"
+
+          find . -type f -name "*.apk" -print
+
+          echo ""
+
+          echo "======================================"
+
+          echo "CONTEUDO DA BIN"
+
+          echo "======================================"
+
+          ls -lah bin || true
+
+
+      # ==========================================================
+      # 12 - GUARDAR LOG DO BUILDOZER
+      # ==========================================================
+
+      - name: Save Buildozer log
+
+        if: always()
+
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+
+        run: |
+
+          mkdir -p build_logs
+
+          buildozer -v android debug > build_logs/buildozer_retry.log 2>&1 || true
+
+
+      # ==========================================================
+      # 13 - ENVIAR APK
+      # ==========================================================
 
       - name: Upload APK
+
         if: success()
+
         uses: actions/upload-artifact@v4
+
         with:
+
           name: GNV-V28.27-APK
-          path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
+
+          path: GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
+
           if-no-files-found: error
 
+          
