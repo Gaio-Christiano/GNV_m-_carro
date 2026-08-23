@@ -1,0 +1,73 @@
+name: Build APK Android - GNV V28.27
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compilar APK GNV V28.27
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.9'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git zip unzip openjdk-17-jdk autoconf automake autopoint libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libffi-dev libssl-dev libltdl-dev cmake ccache lbzip2 wget patch
+
+      - name: Install Buildozer and Cython
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install buildozer
+          python -m pip install "Cython==0.29.33"
+
+      - name: Check source
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: python -m py_compile main.py
+
+      - name: Clean old build
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: rm -rf .buildozer bin
+
+      - name: Bootstrap python-for-android checkout
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: buildozer android p4a -- --help
+
+      - name: Patch p4a pip bootstrap
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.buildozer/android/platform/python-for-android/pythonforandroid/build.py')
+          s = p.read_text(encoding='utf-8')
+          old = "source venv/bin/activate && pip install -U pip"
+          new = "source venv/bin/activate && python -m pip install -U \"pip<26.2\""
+          if old not in s:
+              raise SystemExit('Trecho p4a de atualização do pip não encontrado.')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          print('Patch aplicado:', p)
+          PY
+
+      - name: Build APK
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: buildozer -v android debug
+
+      - name: List APK
+        if: always()
+        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        run: find bin -type f -name '*.apk' -print || true
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GNV-V28.27-APK
+          path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
+          if-no-files-found: error
+
