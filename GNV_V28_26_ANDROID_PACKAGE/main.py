@@ -64,7 +64,13 @@ from datetime import datetime
 # PARTE 246
 # IMPORT FPDF
 # =============================================================================
-from fpdf import FPDF
+try:
+    from fpdf import FPDF
+    FPDF_AVAILABLE = True
+except ImportError:
+    # fpdf2 não é empacotado no APK Android. Mantemos suporte no PC.
+    FPDF = None
+    FPDF_AVAILABLE = False
 
 
 
@@ -5204,7 +5210,7 @@ class BancoGNV:
 # CLASSE PDF
 # =============================================================================
 
-class RelatorioPDF(FPDF):
+class RelatorioPDF(FPDF if FPDF is not None else object):
 
     def header(self):
 
@@ -7351,6 +7357,12 @@ class MobileGNVApp(App):
         except Exception as e:self.export_status.text=f"Erro: {e}"
     def _export_pdf(self):
         try:
+            if not FPDF_AVAILABLE:
+                self.export_status.text = (
+                    "PDF não está disponível na versão Android. "
+                    "No Windows/desktop continue usando fpdf2 para exportar PDF."
+                )
+                return
             path=self.base_dir/"relatorio_gnv_android.pdf"
             pdf=FPDF(); pdf.add_page(); pdf.set_font("Arial",size=10)
             pdf.multi_cell(0,6,"RELATÓRIO TÉCNICO DE GNV")
