@@ -4,412 +4,229 @@ on:
   workflow_dispatch:
 
 jobs:
-
   build:
-
     name: Compilar APK GNV V28.27
-
     runs-on: ubuntu-22.04
 
-    env:
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+    defaults:
+      run:
+        shell: bash
 
     steps:
 
-      # ==========================================================
-      # 1. CHECKOUT
-      # ==========================================================
+      # ============================================================
+      # 1. BAIXAR O PROJETO
+      # ============================================================
+      - name: Checkout do projeto
+        uses: actions/checkout@v4
 
-      - name: Checkout repository
-        uses: actions/checkout@v6
 
-
-      # ==========================================================
-      # 2. PYTHON 3.12.9
-      # ==========================================================
-
-      - name: Setup Python 3.12.9
-        uses: actions/setup-python@v6
+      # ============================================================
+      # 2. PYTHON
+      # ============================================================
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12.9'
+          python-version: "3.12"
 
 
-      # ==========================================================
-      # 3. VERIFICAR PYTHON
-      # ==========================================================
+      # ============================================================
+      # 3. JAVA 17
+      # ============================================================
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
-      - name: Verify Python
+
+      # ============================================================
+      # 4. ANDROID SDK
+      #
+      # IMPORTANTE:
+      # Não usamos sdkmanager antes desta etapa.
+      # Esta action instala as Command-line Tools e coloca
+      # sdkmanager no PATH.
+      # ============================================================
+      - name: Instalar Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+
+      # ============================================================
+      # 5. VERIFICAR SDKMANAGER
+      #
+      # Se isto falhar, NÃO começamos uma compilação de 30 minutos.
+      # O workflow para imediatamente mostrando o problema.
+      # ============================================================
+      - name: Verificar ambiente Android
         run: |
-
           echo "=========================================="
-          echo "PYTHON"
+          echo "VERIFICANDO ANDROID SDK"
           echo "=========================================="
 
+          echo ""
+          echo "ANDROID_HOME:"
+          echo "${ANDROID_HOME:-não definido}"
+
+          echo ""
+          echo "ANDROID_SDK_ROOT:"
+          echo "${ANDROID_SDK_ROOT:-não definido}"
+
+          echo ""
+          echo "SDKMANAGER:"
+          command -v sdkmanager
+
+          echo ""
+          sdkmanager --version
+
+          echo ""
+          echo "JAVA:"
+          java -version
+
+          echo ""
+          echo "PYTHON:"
           python --version
 
-          python -c "import sys; print(sys.executable)"
+          echo ""
+          echo "=========================================="
+          echo "AMBIENTE ANDROID OK"
+          echo "=========================================="
 
-          python -m pip --version
 
-
-      # ==========================================================
-      # 4. DEPENDENCIAS DO UBUNTU
-      # ==========================================================
-
-      - name: Install Linux dependencies
+      # ============================================================
+      # 6. DEPENDÊNCIAS DO LINUX
+      # ============================================================
+      - name: Instalar dependências Linux
         run: |
-
           sudo apt-get update
 
           sudo apt-get install -y \
-            build-essential \
             git \
             zip \
             unzip \
-            openjdk-17-jdk \
             autoconf \
             automake \
-            autopoint \
             libtool \
             pkg-config \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            libffi-dev \
-            libssl-dev \
-            libltdl-dev \
             cmake \
-            ccache \
-            lbzip2 \
-            wget \
-            patch
+            gettext \
+            libltdl-dev
 
 
-      # ==========================================================
-      # 5. JAVA
-      # ==========================================================
-
-      - name: Verify Java
+      # ============================================================
+      # 7. INSTALAR BUILDZEOER
+      # ============================================================
+      - name: Instalar Buildozer
         run: |
-
-          echo "JAVA_HOME=$JAVA_HOME"
-
-          java -version
-
-
-      # ==========================================================
-      # 6. PIP / SETUPTOOLS
-      # ==========================================================
-
-      - name: Install Python build tools
-        run: |
-
-          python -m pip install --upgrade \
-            pip \
-            setuptools \
-            wheel
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install buildozer
 
 
-      # ==========================================================
-      # 7. CYTHON
-      # ==========================================================
-
-      - name: Install Cython
-        run: |
-
-          python -m pip install "Cython==0.29.33"
-
-
-      # ==========================================================
-      # 8. PYTHON-FOR-ANDROID
-      # ==========================================================
-
-      - name: Install python-for-android
-        run: |
-
-          python -m pip install \
-            "python-for-android==2024.1.21"
-
-
-      # ==========================================================
-      # 9. BUILDOZER
-      # ==========================================================
-
-      - name: Install Buildozer
-        run: |
-
-          python -m pip install \
-            "buildozer==1.5.0"
-
-
-      # ==========================================================
-      # 10. VERIFICAR VERSÕES
-      # ==========================================================
-
-      - name: Verify Android build tools
-        run: |
-
-          echo "=========================================="
-          echo "PYTHON"
-          echo "=========================================="
-
-          python --version
-
-          echo "=========================================="
-          echo "CYTHON"
-          echo "=========================================="
-
-          cython --version
-
-          echo "=========================================="
-          echo "BUILDOZER"
-          echo "=========================================="
-
-          buildozer --version
-
-          echo "=========================================="
-          echo "PYTHON-FOR-ANDROID"
-          echo "=========================================="
-
-          python -m pip show python-for-android
-
-
-      # ==========================================================
-      # 11. VERIFICAR PROJETO
-      # ==========================================================
-
-      - name: Verify project files
+      # ============================================================
+      # 8. ENTRAR NA PASTA DO PROJETO ANDROID
+      # ============================================================
+      - name: Verificar projeto
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
           echo "=========================================="
-          echo "DIRETORIO"
+          echo "ARQUIVOS DO PROJETO"
           echo "=========================================="
 
           pwd
 
-          echo "=========================================="
-          echo "ARQUIVOS"
-          echo "=========================================="
+          echo ""
+          echo "Arquivos:"
+          find . -maxdepth 2 -type f | sort
 
-          find . -maxdepth 2 -type f -print
-
+          echo ""
           echo "=========================================="
-          echo "BUILDOZER.SPEC"
+          echo "BUILDZER.SPEC"
           echo "=========================================="
 
           cat buildozer.spec
 
 
-      # ==========================================================
-      # 12. TESTAR MAIN.PY
-      # ==========================================================
-
-      - name: Test main.py
+      # ============================================================
+      # 9. LIMPAR BUILD ANTERIOR
+      # ============================================================
+      - name: Limpar compilação anterior
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
-          python -m py_compile main.py
-
-          echo "=========================================="
-          echo "main.py OK"
-          echo "=========================================="
-
-
-      # ==========================================================
-      # 13. GARANTIR NDK 28C
-      # ==========================================================
-
-      - name: Install Android NDK 28c
-        run: |
-
-          yes | sdkmanager --licenses >/dev/null || true
-
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "ndk;28.2.13676358"
-
-
-      # ==========================================================
-      # 14. CONFIGURAR NDK
-      # ==========================================================
-
-      - name: Configure Android environment
-        run: |
-
-          NDK_PATH="$ANDROID_SDK_ROOT/ndk/28.2.13676358"
-
-          echo "ANDROID_NDK_HOME=$NDK_PATH" >> "$GITHUB_ENV"
-
-          echo "ANDROID_NDK=$NDK_PATH" >> "$GITHUB_ENV"
-
-          echo "ANDROIDNDK=$NDK_PATH" >> "$GITHUB_ENV"
-
-          echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
-
-          echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
-
-          echo "=========================================="
-          echo "ANDROID NDK"
-          echo "=========================================="
-
-          "$NDK_PATH/ndk-build" --version || true
-
-          cat "$NDK_PATH/source.properties"
-
-
-      # ==========================================================
-      # 15. LIMPAR BUILD ANTERIOR
-      # ==========================================================
-
-      - name: Clean Build
-        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-        run: |
-
           rm -rf .buildozer
-
           rm -rf bin
 
           mkdir -p bin
 
 
-      # ==========================================================
-      # 16. COMPILAR APK
-      # ==========================================================
-
-      - name: Build APK
+      # ============================================================
+      # 10. COMPILAR APK
+      #
+      # ATENÇÃO:
+      # Não chamamos sdkmanager manualmente aqui.
+      # O Android SDK já foi preparado acima.
+      # ============================================================
+      - name: Compilar APK GNV V28.27
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
-          buildozer -v android debug
-
-
-      # ==========================================================
-      # 17. PROCURAR APK
-      # ==========================================================
-
-      - name: Find generated APK
-        if: always()
-        run: |
+          set -o pipefail
 
           echo "=========================================="
-          echo "APK ENCONTRADOS"
+          echo "INICIANDO BUILD APK"
           echo "=========================================="
 
-          find "$GITHUB_WORKSPACE" \
-            -type f \
-            -name "*.apk" \
-            -print
+          buildozer -v android debug 2>&1 | tee build.log
 
 
-      # ==========================================================
-      # 18. MOSTRAR BIN
-      # ==========================================================
-
-      - name: List APK directory
+      # ============================================================
+      # 11. MOSTRAR RESULTADO
+      # ============================================================
+      - name: Verificar APK
         if: always()
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
           echo "=========================================="
-          echo "BIN"
+          echo "RESULTADO DA COMPILAÇÃO"
           echo "=========================================="
 
-          ls -lah bin || true
+          echo ""
+          echo "Conteúdo de bin/:"
+          find bin -maxdepth 2 -type f -print 2>/dev/null || true
+
+          echo ""
+          echo "APKs encontrados:"
+          find . -type f -name "*.apk" -print 2>/dev/null || true
 
 
-      # ==========================================================
-      # 19. GERAR ARQUIVO DE LOG
-      # ==========================================================
-
-      - name: Collect build information
+      # ============================================================
+      # 12. GUARDAR LOG MESMO SE A COMPILAÇÃO FALHAR
+      # ============================================================
+      - name: Upload dos logs
         if: always()
-        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-        run: |
-
-          mkdir -p build_logs
-
-          echo "GNV V28.27 BUILD INFORMATION" \
-            > build_logs/build_environment.txt
-
-          echo "" \
-            >> build_logs/build_environment.txt
-
-          echo "Python:" \
-            >> build_logs/build_environment.txt
-
-          python --version \
-            >> build_logs/build_environment.txt 2>&1
-
-          echo "" \
-            >> build_logs/build_environment.txt
-
-          echo "Buildozer:" \
-            >> build_logs/build_environment.txt
-
-          buildozer --version \
-            >> build_logs/build_environment.txt 2>&1 || true
-
-          echo "" \
-            >> build_logs/build_environment.txt
-
-          echo "NDK:" \
-            >> build_logs/build_environment.txt
-
-          echo "$ANDROID_NDK_HOME" \
-            >> build_logs/build_environment.txt
-
-          echo "" \
-            >> build_logs/build_environment.txt
-
-          echo "APK:" \
-            >> build_logs/build_environment.txt
-
-          find . \
-            -type f \
-            -name "*.apk" \
-            -print \
-            >> build_logs/build_environment.txt 2>&1 || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: GNV_V28_27_LOGS
+          path: |
+            GNV_V28_27_ANDROID_BUILD_FIX/build.log
+            GNV_V28_27_ANDROID_BUILD_FIX/.buildozer/**/*.log
+          if-no-files-found: warn
 
 
-      # ==========================================================
-      # 20. UPLOAD APK
-      # ==========================================================
-
+      # ============================================================
+      # 13. ENVIAR APK
+      # ============================================================
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
-
         with:
-
-          name: GNV-V28.27-APK
-
+          name: GNV_V28_27_APK
           path: |
             GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
-
           if-no-files-found: error
-
-
-      # ==========================================================
-      # 21. UPLOAD DIAGNOSTICO
-      # ==========================================================
-
-      - name: Upload diagnostic files
-        if: always()
-        uses: actions/upload-artifact@v4
-
-        with:
-
-          name: GNV-V28.27-DIAGNOSTICO
-
-          path: |
-            GNV_V28_27_ANDROID_BUILD_FIX/build_logs/**
-            GNV_V28_27_ANDROID_BUILD_FIX/.buildozer/android/platform/python-for-android/**/config.log
-            GNV_V28_27_ANDROID_BUILD_FIX/.buildozer/android/platform/python-for-android/**/build.log
-
-          if-no-files-found: warn
+          
           
            
           
