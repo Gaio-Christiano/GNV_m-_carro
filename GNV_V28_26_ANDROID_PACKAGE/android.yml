@@ -1,42 +1,57 @@
-name: Build APK Android - GNV V28.26
+name: Build APK GNV V28.27
 
 on:
   workflow_dispatch:
 
 jobs:
+
   build:
-    name: Compilar APK GNV V28.26
+
+    name: Compilar APK GNV V28.27
+
     runs-on: ubuntu-22.04
 
     steps:
 
       # ============================================================
-      # 1. BAIXAR O REPOSITÓRIO
+      # 1 - BAIXAR REPOSITORIO
       # ============================================================
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
 
       # ============================================================
-      # 2. PYTHON 3.12.9
+      # 2 - PYTHON DO HOST
       # ============================================================
-      - name: Set up Python 3.12.9
-        uses: actions/setup-python@v5
+
+      - name: Setup Python 3.12.9
+        uses: actions/setup-python@v6
+
         with:
           python-version: '3.12.9'
+          cache: 'pip'
+
 
       # ============================================================
-      # 3. VERIFICAR PYTHON
+      # 3 - VERIFICAR PYTHON
       # ============================================================
+
       - name: Verify Python
         run: |
+
           python --version
+          python -c "import sys; print(sys.version)"
           python -m pip --version
 
+
       # ============================================================
-      # 4. DEPENDÊNCIAS DO SISTEMA
+      # 4 - DEPENDENCIAS LINUX
       # ============================================================
-      - name: Install system dependencies
+
+      - name: Install Linux dependencies
         run: |
+
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -45,7 +60,6 @@ jobs:
             zip \
             unzip \
             openjdk-17-jdk \
-            python3-dev \
             autoconf \
             automake \
             autopoint \
@@ -63,181 +77,246 @@ jobs:
             wget \
             patch
 
+
       # ============================================================
-      # 5. FERRAMENTAS PYTHON
+      # 5 - JAVA
       # ============================================================
-      - name: Install Buildozer and Cython
+
+      - name: Configure Java 17
         run: |
+
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+
+          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
+
+
+      # ============================================================
+      # 6 - ATUALIZAR FERRAMENTAS PYTHON
+      # ============================================================
+
+      - name: Upgrade Python tools
+        run: |
+
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install buildozer
+
+
+      # ============================================================
+      # 7 - CYTHON
+      # ============================================================
+
+      - name: Install Cython
+        run: |
+
           python -m pip install "Cython==0.29.33"
 
+
       # ============================================================
-      # 6. VERIFICAR FERRAMENTAS
+      # 8 - PYTHON-FOR-ANDROID ATUAL
       # ============================================================
+
+      - name: Install python-for-android
+        run: |
+
+          python -m pip install --upgrade \
+            https://github.com/kivy/python-for-android/archive/refs/heads/develop.zip
+
+
+      # ============================================================
+      # 9 - BUILDOZER
+      # ============================================================
+
+      - name: Install Buildozer
+        run: |
+
+          python -m pip install --upgrade buildozer
+
+
+      # ============================================================
+      # 10 - VERIFICAR FERRAMENTAS
+      # ============================================================
+
       - name: Verify build tools
         run: |
-          echo "===== PYTHON ====="
+
+          echo "=========================================="
+          echo "PYTHON"
+          echo "=========================================="
+
           python --version
 
-          echo "===== PIP ====="
-          python -m pip --version
+          echo "=========================================="
+          echo "CYTHON"
+          echo "=========================================="
 
-          echo "===== BUILDOZER ====="
-          buildozer --version
-
-          echo "===== CYTHON ====="
           cython --version
 
+          echo "=========================================="
+          echo "BUILDOZER"
+          echo "=========================================="
+
+          buildozer --version
+
+          echo "=========================================="
+          echo "P4A"
+          echo "=========================================="
+
+          python -m pythonforandroid.toolchain version || true
+
+
       # ============================================================
-      # 7. VERIFICAR O CÓDIGO DO APLICATIVO
+      # 11 - VERIFICAR PROJETO
       # ============================================================
-      - name: Check Python source
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+
+      - name: Verify project
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          echo "===== TESTANDO main.py ====="
+
+          echo "=========================================="
+          echo "PASTA DO PROJETO"
+          echo "=========================================="
+
+          pwd
+
+          echo "=========================================="
+          echo "ARQUIVOS"
+          echo "=========================================="
+
+          ls -lah
+
+          echo "=========================================="
+          echo "BUILDOZER.SPEC"
+          echo "=========================================="
+
+          cat buildozer.spec
+
+
+      # ============================================================
+      # 12 - TESTAR PYTHON
+      # ============================================================
+
+      - name: Test Python source
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+        run: |
+
           python -m py_compile main.py
+
           echo "main.py compilou corretamente."
 
+
       # ============================================================
-      # 8. LIMPAR BUILD ANTERIOR
+      # 13 - LIMPAR BUILD ANTERIOR
       # ============================================================
-      - name: Clean previous Buildozer files
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+
+      - name: Clean Buildozer
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
+
+          buildozer android clean || true
+
           rm -rf .buildozer
-          rm -rf bin
-          echo "Build anterior removido."
+
 
       # ============================================================
-      # 9. COMPILAR APK
+      # 14 - COMPILAR APK
       # ============================================================
+
       - name: Build APK
-        id: build_apk
-        continue-on-error: true
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
-        run: |
-          set -o pipefail
-
-          buildozer -v android debug 2>&1 | tee build_complete.log
-
-          BUILD_EXIT=${PIPESTATUS[0]}
-
-          echo "BUILD_EXIT=$BUILD_EXIT"
-
-          exit $BUILD_EXIT
-
-      # ============================================================
-      # 10. ANALISAR AUTOMATICAMENTE O LOG
-      # ============================================================
-      - name: Analyze build error
-        if: steps.build_apk.outcome == 'failure'
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
 
-          echo ""
-          echo "============================================================"
-          echo " ANALISE AUTOMATICA DO ERRO"
-          echo "============================================================"
-          echo ""
+          buildozer -v android debug
 
-          if [ ! -f build_complete.log ]; then
-            echo "ERRO: build_complete.log não foi encontrado."
-            exit 1
-          fi
-
-          echo "Tamanho do log:"
-          wc -l build_complete.log
-
-          echo ""
-          echo "============================================================"
-          echo " ULTIMAS 200 LINHAS"
-          echo "============================================================"
-
-          tail -n 200 build_complete.log
-
-          echo ""
-          echo "============================================================"
-          echo " LINHAS COM ERROR"
-          echo "============================================================"
-
-          grep -inE "error:|ERROR:|BUILD FAILED|build failed|command failed|exception|traceback" \
-            build_complete.log | tail -n 200 || true
-
-          echo ""
-          echo "============================================================"
-          echo " ERROS DO COMPILADOR C/C++"
-          echo "============================================================"
-
-          grep -inE \
-            "clang error|fatal error:|undeclared function|undefined reference|no such file|cannot find|not found" \
-            build_complete.log | tail -n 200 || true
-
-          echo ""
-          echo "============================================================"
-          echo " PYTHON / PIP"
-          echo "============================================================"
-
-          grep -inE \
-            "pip|python|python3|hostpython|Cython|cython" \
-            build_complete.log | grep -iE \
-            "error|failed|exception|conflict|incompatible|not found|cannot install" \
-            | tail -n 100 || true
-
-          echo ""
-          echo "============================================================"
-          echo " DEPENDENCIAS"
-          echo "============================================================"
-
-          grep -inE \
-            "fpdf|openpyxl|pillow|kivy|sdl2|python3" \
-            build_complete.log | grep -iE \
-            "error|failed|exception|conflict|incompatible|not found|cannot install" \
-            | tail -n 100 || true
-
-          echo ""
-          echo "============================================================"
-          echo " FIM DA ANALISE"
-          echo "============================================================"
 
       # ============================================================
-      # 11. SALVAR LOG COMPLETO COMO ARTIFACT
+      # 15 - LOCALIZAR APK
       # ============================================================
-      - name: Upload complete build log
+
+      - name: Find APK
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: GNV-V28.26-BUILD-LOG
-          path: GNV_V28_26_ANDROID_PACKAGE/build_complete.log
-          if-no-files-found: warn
-
-      # ============================================================
-      # 12. MOSTRAR BIN
-      # ============================================================
-      - name: List generated APK
-        if: always()
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
         run: |
-          echo "============================================================"
-          echo " ARQUIVOS GERADOS"
-          echo "============================================================"
 
-          if [ -d bin ]; then
-            ls -lah bin
-          else
-            echo "A pasta bin não foi criada."
-          fi
+          echo "=========================================="
+          echo "PROCURANDO APK"
+          echo "=========================================="
+
+          find . \
+            -type f \
+            \( -name "*.apk" -o -name "*.aab" \) \
+            -print
+
 
       # ============================================================
-      # 13. ENVIAR APK
+      # 16 - LISTAR BIN
       # ============================================================
+
+      - name: List bin directory
+        if: always()
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+        run: |
+
+          echo "=========================================="
+          echo "BIN"
+          echo "=========================================="
+
+          ls -lah bin || true
+
+
+      # ============================================================
+      # 17 - SALVAR LOG COMPLETO
+      # ============================================================
+
+      - name: Save Buildozer logs
+        if: always()
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+        run: |
+
+          mkdir -p build_logs
+
+          cp -r .buildozer build_logs/buildozer || true
+
+          find .buildozer \
+            -type f \
+            -name "*.log" \
+            -exec cp --parents {} build_logs/ \; \
+            2>/dev/null || true
+
+
+      # ============================================================
+      # 18 - UPLOAD APK
+      # ============================================================
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
+
         with:
-          name: GNV-V28.26-APK
-          path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
+
+          name: GNV-V28.27-APK
+
+          path: |
+            GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
+
           if-no-files-found: error
+
+
+      # ============================================================
+      # 19 - UPLOAD LOGS
+      # ============================================================
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name: GNV-V28.27-BUILD-LOGS
+
+          path: |
+            GNV_V28_27_ANDROID_BUILD_FIX/build_logs/**
+            GNV_V28_27_ANDROID_BUILD_FIX/.buildozer/android/platform/python-for-android/**
+
+          if-no-files-found: warn
+          
 
           
           
