@@ -1,5 +1,4 @@
 name: Build APK GNV V28.27
-
 on:
   workflow_dispatch:
 
@@ -7,224 +6,121 @@ jobs:
   build:
     name: Compilar APK GNV V28.27
     runs-on: ubuntu-22.04
-
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
-      # ============================================================
-      # 1. BAIXAR O PROJETO
-      # ============================================================
-      - name: Checkout do projeto
-        uses: actions/checkout@v4
-
-
-      # ============================================================
-      # 2. PYTHON
-      # ============================================================
-      - name: Configurar Python 3.12
-        uses: actions/setup-python@v5
+      - name: Python 3.12.9 EXATO
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: '3.12.9'
+          cache: pip
 
-
-      # ============================================================
-      # 3. JAVA 17
-      # ============================================================
-      - name: Configurar Java 17
-        uses: actions/setup-java@v4
+      - name: Java 17
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-
-      # ============================================================
-      # 4. ANDROID SDK
-      #
-      # IMPORTANTE:
-      # Não usamos sdkmanager antes desta etapa.
-      # Esta action instala as Command-line Tools e coloca
-      # sdkmanager no PATH.
-      # ============================================================
-      - name: Instalar Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          accept-android-sdk-licenses: true
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
-
-
-      # ============================================================
-      # 5. VERIFICAR SDKMANAGER
-      #
-      # Se isto falhar, NÃO começamos uma compilação de 30 minutos.
-      # O workflow para imediatamente mostrando o problema.
-      # ============================================================
-      - name: Verificar ambiente Android
+      - name: Dependencias do sistema
         run: |
-          echo "=========================================="
-          echo "VERIFICANDO ANDROID SDK"
-          echo "=========================================="
-
-          echo ""
-          echo "ANDROID_HOME:"
-          echo "${ANDROID_HOME:-não definido}"
-
-          echo ""
-          echo "ANDROID_SDK_ROOT:"
-          echo "${ANDROID_SDK_ROOT:-não definido}"
-
-          echo ""
-          echo "SDKMANAGER:"
-          command -v sdkmanager
-
-          echo ""
-          sdkmanager --version
-
-          echo ""
-          echo "JAVA:"
-          java -version
-
-          echo ""
-          echo "PYTHON:"
-          python --version
-
-          echo ""
-          echo "=========================================="
-          echo "AMBIENTE ANDROID OK"
-          echo "=========================================="
-
-
-      # ============================================================
-      # 6. DEPENDÊNCIAS DO LINUX
-      # ============================================================
-      - name: Instalar dependências Linux
-        run: |
+          set -euxo pipefail
           sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev build-essential
 
-          sudo apt-get install -y \
-            git \
-            zip \
-            unzip \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            cmake \
-            gettext \
-            libltdl-dev
-
-
-      # ============================================================
-      # 7. INSTALAR BUILDZEOER
-      # ============================================================
       - name: Instalar Buildozer
         run: |
+          set -euxo pipefail
+          python --version
           python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel
-          python -m pip install buildozer
+          python -m pip install buildozer "cython==0.29.34" virtualenv
 
-
-      # ============================================================
-      # 8. ENTRAR NA PASTA DO PROJETO ANDROID
-      # ============================================================
-      - name: Verificar projeto
+      - name: Preparar pacote
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          echo "=========================================="
-          echo "ARQUIVOS DO PROJETO"
-          echo "=========================================="
-
-          pwd
-
-          echo ""
-          echo "Arquivos:"
-          find . -maxdepth 2 -type f | sort
-
-          echo ""
-          echo "=========================================="
-          echo "BUILDZER.SPEC"
-          echo "=========================================="
-
-          cat buildozer.spec
-
-
-      # ============================================================
-      # 9. LIMPAR BUILD ANTERIOR
-      # ============================================================
-      - name: Limpar compilação anterior
-        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-        run: |
+          set -euxo pipefail
+          test -f buildozer.spec
+          unset ANDROIDNDK ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT || true
+          if [ ! -f main.py ]; then
+            candidate="$(find . -maxdepth 1 -type f -iname '*.py' ! -name 'main.py' ! -name 'test_*.py' | sort | head -1)"
+            test -n "$candidate"
+            cp "$candidate" main.py
+            echo "main.py criado a partir de $candidate"
+          fi
           rm -rf .buildozer
-          rm -rf bin
+          grep -E '^(requirements|android.api|android.minapi|android.ndk|android.archs|p4a.branch|log_level)' buildozer.spec || true
 
-          mkdir -p bin
-
-
-      # ============================================================
-      # 10. COMPILAR APK
-      #
-      # ATENÇÃO:
-      # Não chamamos sdkmanager manualmente aqui.
-      # O Android SDK já foi preparado acima.
-      # ============================================================
-      - name: Compilar APK GNV V28.27
+      - name: Build APK com log completo
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
           set -o pipefail
+          rm -f build_full.log
+          {
+            echo "===== BUILD GNV V28.27 ====="
+            date -u
+            python --version
+            python -c "import sys; print(sys.executable); print(sys.version)"
+            buildozer -v android debug
+          } 2>&1 | tee build_full.log
+          status=${PIPESTATUS[0]}
+          echo "BUILD_STATUS=$status" | tee -a build_full.log
+          exit "$status"
 
-          echo "=========================================="
-          echo "INICIANDO BUILD APK"
-          echo "=========================================="
-
-          buildozer -v android debug 2>&1 | tee build.log
-
-
-      # ============================================================
-      # 11. MOSTRAR RESULTADO
-      # ============================================================
-      - name: Verificar APK
+      - name: Diagnostico SEMPRE
         if: always()
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          echo "=========================================="
-          echo "RESULTADO DA COMPILAÇÃO"
-          echo "=========================================="
+          set +e
+          {
+            echo "===== DIAGNOSTICO ====="
+            python --version
+            buildozer --version
+            echo
+            echo "===== ERROS ====="
+            grep -nEi 'error:|fatal error:|make: \*\*\*|command failed|Error code|Traceback|failed|No such file|not found' build_full.log | tail -250
+            echo
+            echo "===== DIRETORIOS p4a ====="
+            find .buildozer/android/platform -maxdepth 4 -type d 2>/dev/null | grep -E 'python-for-android|build-arm64|dists' | head -200
+          } > diagnostic_summary.txt
+          cat diagnostic_summary.txt
+          mkdir -p diagnostic_artifact
+          cp -f build_full.log diagnostic_summary.txt diagnostic_artifact/ 2>/dev/null || true
+          find .buildozer -type f \( -name '*.log' -o -name 'config.log' \) -exec cp --parents {} diagnostic_artifact/ \; 2>/dev/null || true
+          tar -czf gnv_v28_27_build_diagnostics.tar.gz diagnostic_artifact 2>/dev/null || true
 
-          echo ""
-          echo "Conteúdo de bin/:"
-          find bin -maxdepth 2 -type f -print 2>/dev/null || true
-
-          echo ""
-          echo "APKs encontrados:"
-          find . -type f -name "*.apk" -print 2>/dev/null || true
-
-
-      # ============================================================
-      # 12. GUARDAR LOG MESMO SE A COMPILAÇÃO FALHAR
-      # ============================================================
-      - name: Upload dos logs
+      - name: Upload logs SEMPRE
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: GNV_V28_27_LOGS
+          name: GNV_V28_27_BUILD_DIAGNOSTICS
           path: |
-            GNV_V28_27_ANDROID_BUILD_FIX/build.log
-            GNV_V28_27_ANDROID_BUILD_FIX/.buildozer/**/*.log
+            GNV_V28_27_ANDROID_BUILD_FIX/build_full.log
+            GNV_V28_27_ANDROID_BUILD_FIX/diagnostic_summary.txt
+            GNV_V28_27_ANDROID_BUILD_FIX/gnv_v28_27_build_diagnostics.tar.gz
           if-no-files-found: warn
+          retention-days: 14
 
+      - name: Procurar APK
+        if: success()
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+        run: |
+          set -euxo pipefail
+          find . -type f -name '*.apk' -print
+          test -n "$(find . -type f -name '*.apk' -print -quit)"
 
-      # ============================================================
-      # 13. ENVIAR APK
-      # ============================================================
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: GNV_V28_27_APK
-          path: |
-            GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
+          path: GNV_V28_27_ANDROID_BUILD_FIX/**/bin/*.apk
           if-no-files-found: error
+          retention-days: 30
+
           
           
