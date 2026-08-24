@@ -1,17 +1,19 @@
 [app]
 
-title = Sistema GNV V28.27
+title = Sistema de Cálculos e Análise da Capacidade do Cilindro de GNV - V28.27
 
 package.name = gnvcalculator
 package.domain = br.com.gaiochristiano
 
 source.dir = .
 
-source.include_exts = py,png,jpg,jpeg,kv,json,txt,csv
+source.include_exts = py,png,jpg,jpeg,kv,atlas,json,txt,csv
+
+source.exclude_dirs = .buildozer,bin,__pycache__,tests,p4a
 
 version = 28.27
 
-requirements = python3==3.12.9,kivy
+requirements = python3==3.12.9,hostpython3==3.12.9,kivy==2.3.1,openpyxl,fpdf2,pillow
 
 orientation = portrait
 
@@ -19,23 +21,23 @@ fullscreen = 0
 
 android.api = 35
 
-android.minapi = 23
+android.minapi = 26
 
 android.ndk = 28c
+
+android.ndk_api = 26
 
 android.archs = arm64-v8a
 
 android.accept_sdk_license = True
 
-android.permissions = INTERNET
-
 android.allow_backup = True
+
+android.permissions = INTERNET
 
 android.debug_artifact = apk
 
-android.debug_symbols = 1
-
-p4a.branch = v2024.01.21
+p4a.branch = master
 
 
 [buildozer]
