@@ -4,298 +4,99 @@ on:
   workflow_dispatch:
 
 jobs:
-
   build:
-
     name: Compilar APK GNV V28.27
-
     runs-on: ubuntu-22.04
-
     timeout-minutes: 90
-
     defaults:
       run:
         shell: bash
-
     steps:
-
-      # ============================================================
-      # 1 - CHECKOUT
-      # ============================================================
-
       - name: Checkout
         uses: actions/checkout@v5
 
-
-      # ============================================================
-      # 2 - PYTHON 3.12.9
-      # ============================================================
-
       - name: Python 3.12.9
         uses: actions/setup-python@v6
-
         with:
           python-version: "3.12.9"
           cache: pip
 
-
-      # ============================================================
-      # 3 - JAVA 17
-      # ============================================================
-
       - name: Java 17
         uses: actions/setup-java@v5
-
         with:
           distribution: temurin
           java-version: "17"
 
-
-      # ============================================================
-      # 4 - DEPENDENCIAS LINUX
-      # ============================================================
-
       - name: Dependencias Linux
         run: |
-
           sudo apt-get update
-
-          sudo apt-get install -y \
-            build-essential \
-            git \
-            zip \
-            unzip \
-            autoconf \
-            automake \
-            autopoint \
-            libtool \
-            pkg-config \
-            cmake \
-            gettext \
-            libffi-dev \
-            libssl-dev \
-            libltdl-dev \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev
-
-
-      # ============================================================
-      # 5 - VERIFICAR PYTHON
-      # ============================================================
+          sudo apt-get install -y build-essential git zip unzip autoconf automake autopoint libtool pkg-config cmake gettext libffi-dev libssl-dev libltdl-dev zlib1g-dev libncurses5-dev libncursesw5-dev
 
       - name: Verificar Python
         run: |
-
-          echo "=========================================="
-          echo "PYTHON DO HOST"
-          echo "=========================================="
-
           python --version
-
-          python -c "import sys; print(sys.executable)"
-
           python -m pip --version
-
-
-      # ============================================================
-      # 6 - INSTALAR BUILDOZER
-      # ============================================================
 
       - name: Instalar Buildozer
         run: |
-
           python -m pip install --upgrade pip setuptools wheel
-
-          python -m pip install \
-            buildozer \
-            "Cython==0.29.34"
-
-
-      # ============================================================
-      # 7 - VERIFICAR PROJETO
-      # ============================================================
+          python -m pip install buildozer "Cython==0.29.34"
 
       - name: Verificar arquivos
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
-          echo "=========================================="
-          echo "PASTA DO PROJETO"
-          echo "=========================================="
-
-          pwd
-
-          echo ""
-
-          find . \
-            -maxdepth 2 \
-            -type f \
-            -not -path "./.buildozer/*" \
-            | sort
-
-          echo ""
-
           test -f main.py
-
-          test -f \
-            GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
-
+          test -f GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           test -f buildozer.spec
-
-
-      # ============================================================
-      # 8 - CONFERIR buildozer.spec
-      # ============================================================
+          echo "Arquivos Android OK"
 
       - name: Mostrar configuração
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-        run: |
-
-          echo "=========================================="
-          echo "BUILDOZER.SPEC"
-          echo "=========================================="
-
-          cat buildozer.spec
-
-
-      # ============================================================
-      # 9 - LIMPAR COMPILACOES ANTERIORES
-      # ============================================================
+        run: cat buildozer.spec
 
       - name: Limpar build anterior
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
-          rm -rf .buildozer
-
-          rm -rf bin
-
+          rm -rf .buildozer bin
           mkdir -p bin
 
-
-      # ============================================================
-      # 10 - COMPILAR APK
-      #
-      # IMPORTANTE:
-      # android.ndk_api = 26
-      #
-      # Portanto NÃO deve aparecer:
-      #
-      # --ndk-api=23
-      #
-      # no comando do python-for-android.
-      # ============================================================
+      - name: Preparar patch do python-for-android
+        run: |
+          python -m pip install --upgrade "pip<26.2"
 
       - name: Compilar APK
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
           set -o pipefail
-
-          echo "=========================================="
-          echo "INICIANDO BUILD GNV V28.27"
-          echo "=========================================="
-
-          buildozer -v android debug \
-            2>&1 | tee build_full.log
-
-
-      # ============================================================
-      # 11 - DIAGNOSTICO
-      # ============================================================
+          buildozer -v android debug 2>&1 | tee build_full.log
 
       - name: Diagnostico
         if: always()
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-
-          echo "=========================================="
-          echo "DIAGNOSTICO"
-          echo "=========================================="
-
-          echo ""
-
-          echo "Python:"
+          echo "=== DIAGNOSTICO ==="
           python --version
-
-          echo ""
-
-          echo "Buildozer:"
           buildozer --version || true
-
-          echo ""
-
-          echo "ERROS IMPORTANTES:"
-          grep -nEi \
-            "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback" \
-            build_full.log \
-            | tail -200 \
-            || true
-
-          echo ""
-
-          echo "VERIFICANDO ND-API:"
-          grep -n \
-            -- "--ndk-api=" \
-            build_full.log \
-            | tail -20 \
-            || true
-
-
-      # ============================================================
-      # 12 - LOCALIZAR APK
-      # ============================================================
-
-      - name: Localizar APK
-        if: always()
-        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-        run: |
-
-          echo "=========================================="
-          echo "APKs"
-          echo "=========================================="
-
-          find . \
-            -type f \
-            -name "*.apk" \
-            -print \
-            || true
-
-
-      # ============================================================
-      # 13 - UPLOAD LOG
-      # ============================================================
+          if [ -f build_full.log ]; then
+            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback" build_full.log | tail -200 || true
+            echo "=== NDK API ==="
+            grep -n -- "--ndk-api=" build_full.log | tail -20 || true
+          fi
+          echo "=== APKs ==="
+          find . -type f -name "*.apk" -print || true
 
       - name: Upload log
         if: always()
         uses: actions/upload-artifact@v4
-
         with:
-
           name: GNV-V28.27-BUILD-LOG
-
-          path: |
-            GNV_V28_27_ANDROID_BUILD_FIX/build_full.log
-
+          path: GNV_V28_27_ANDROID_BUILD_FIX/build_full.log
           if-no-files-found: warn
-
-
-      # ============================================================
-      # 14 - UPLOAD APK
-      # ============================================================
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
-
         with:
-
           name: GNV-V28.27-APK
-
-          path: |
-            GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
-
+          path: GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
           if-no-files-found: error
-
-          
