@@ -39,7 +39,7 @@ jobs:
 
       - name: Instalar Buildozer
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade "pip<26.2" setuptools wheel
           python -m pip install buildozer "Cython==0.29.34"
 
       - name: Verificar arquivos
@@ -60,14 +60,23 @@ jobs:
           rm -rf .buildozer bin
           mkdir -p bin
 
-      - name: Preparar patch do python-for-android
+      - name: Preparar python-for-android com pip fixado
         run: |
-          python -m pip install --upgrade "pip<26.2"
+          rm -rf "$RUNNER_TEMP/python-for-android"
+          git clone --depth 1 --branch master https://github.com/kivy/python-for-android.git "$RUNNER_TEMP/python-for-android"
+          P4A_BUILD="$RUNNER_TEMP/python-for-android/pythonforandroid/build.py"
+          test -f "$P4A_BUILD"
+          grep -n "pip install -U pip" "$P4A_BUILD"
+          sed -i "s/pip install -U pip/pip install 'pip<26.2'/g" "$P4A_BUILD"
+          echo "=== PATCH P4A ==="
+          grep -n "pip install.*pip" "$P4A_BUILD" | tail -5
+          echo "APP_P4A_SOURCE_DIR=$RUNNER_TEMP/python-for-android" >> "$GITHUB_ENV"
 
       - name: Compilar APK
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
           set -o pipefail
+          echo "Usando python-for-android corrigido em: $APP_P4A_SOURCE_DIR"
           buildozer -v android debug 2>&1 | tee build_full.log
 
       - name: Diagnostico
@@ -78,7 +87,9 @@ jobs:
           python --version
           buildozer --version || true
           if [ -f build_full.log ]; then
-            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback" build_full.log | tail -200 || true
+            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError" build_full.log | tail -200 || true
+            echo "=== PIP INTERNAL ==="
+            grep -nEi "Upgrade pip|Successfully installed pip|pip 26|pip<26|open_rich_spinner" build_full.log | tail -100 || true
             echo "=== NDK API ==="
             grep -n -- "--ndk-api=" build_full.log | tail -20 || true
           fi
