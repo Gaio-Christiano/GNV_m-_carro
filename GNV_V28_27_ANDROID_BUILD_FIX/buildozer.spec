@@ -13,7 +13,7 @@ source.exclude_dirs = .buildozer,bin,__pycache__,tests,p4a
 
 version = 28.27
 
-requirements = python3==3.12.9,hostpython3==3.12.9,kivy==2.3.1,openpyxl,fpdf2,pillow
+requirements = python3==3.12.9,hostpython3==3.12.9,kivy==2.3.1,openpyxl,pillow
 
 orientation = portrait
 
@@ -27,8 +27,6 @@ android.ndk = 28c
 
 android.ndk_api = 26
 
-android.archs = arm64-v8a
-
 android.accept_sdk_license = True
 
 android.allow_backup = True
@@ -38,7 +36,6 @@ android.permissions = INTERNET
 android.debug_artifact = apk
 
 p4a.branch = master
-
 
 [buildozer]
 
