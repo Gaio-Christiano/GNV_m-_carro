@@ -2,6 +2,9 @@ name: Build APK GNV V28.27
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -48,7 +51,9 @@ jobs:
           test -f main.py
           test -f GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           test -f buildozer.spec
+          grep -q "filetype==1.2.0" buildozer.spec
           echo "Arquivos Android OK"
+          echo "Kivy runtime dependency filetype: OK"
 
       - name: Preparar python-for-android corrigido
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -99,7 +104,9 @@ jobs:
           buildozer --version || true
           if [ -f build_full.log ]; then
             echo "=== ERROS ==="
-            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError" build_full.log | tail -200 || true
+            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError|ModuleNotFoundError" build_full.log | tail -200 || true
+            echo "=== RUNTIME DEPENDENCIES ==="
+            grep -nEi "filetype|Successfully installed|ModuleNotFoundError|ImportError" build_full.log | tail -100 || true
             echo "=== PIP INTERNAL ==="
             grep -nEi "pip install.*pip|Successfully installed pip|pip 26|pip 25\.3|RequirementInformation|open_rich_spinner" build_full.log | tail -100 || true
             echo "=== NDK API ==="
