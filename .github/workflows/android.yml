@@ -64,14 +64,14 @@ jobs:
           p = Path("p4a/pythonforandroid/build.py")
           s = p.read_text()
           old = "pip install -U pip"
-          new = "pip install --force-reinstall --no-cache-dir 'pip==25.3'"
+          new = "python -m pip --version"
           if old not in s:
               raise SystemExit("ERRO: comando de atualização do pip não encontrado em python-for-android")
           p.write_text(s.replace(old, new))
-          print("Patch aplicado: pip==25.3 com force-reinstall")
+          print("Patch aplicado: NÃO atualizar pip dentro do venv do p4a")
           PY
           echo "=== LINHA CORRIGIDA ==="
-          grep -n "pip install.*pip" "$P4A_BUILD" | tail -5
+          grep -n "pip.*version\|pip install.*pip" "$P4A_BUILD" | tail -5
 
       - name: Mostrar configuração
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -101,7 +101,7 @@ jobs:
             echo "=== ERROS ==="
             grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError" build_full.log | tail -200 || true
             echo "=== PIP INTERNAL ==="
-            grep -nEi "pip install.*pip|Successfully installed pip|pip 26|pip 25\.3|open_rich_spinner" build_full.log | tail -100 || true
+            grep -nEi "pip install.*pip|Successfully installed pip|pip 26|pip 25\.3|RequirementInformation|open_rich_spinner" build_full.log | tail -100 || true
             echo "=== NDK API ==="
             grep -n -- "--ndk-api=" build_full.log | tail -20 || true
           fi
