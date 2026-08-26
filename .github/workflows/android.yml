@@ -50,6 +50,29 @@ jobs:
           test -f buildozer.spec
           echo "Arquivos Android OK"
 
+      - name: Preparar python-for-android corrigido
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+        run: |
+          rm -rf p4a
+          git clone --depth 1 --branch master https://github.com/kivy/python-for-android.git p4a
+          P4A_BUILD="$PWD/p4a/pythonforandroid/build.py"
+          test -f "$P4A_BUILD"
+          echo "=== LINHA ORIGINAL ==="
+          grep -n "pip install -U pip" "$P4A_BUILD" || true
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("p4a/pythonforandroid/build.py")
+          s = p.read_text()
+          old = "pip install -U pip"
+          new = "pip install --force-reinstall --no-cache-dir 'pip==25.3'"
+          if old not in s:
+              raise SystemExit("ERRO: comando de atualização do pip não encontrado em python-for-android")
+          p.write_text(s.replace(old, new))
+          print("Patch aplicado: pip==25.3 com force-reinstall")
+          PY
+          echo "=== LINHA CORRIGIDA ==="
+          grep -n "pip install.*pip" "$P4A_BUILD" | tail -5
+
       - name: Mostrar configuração
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: cat buildozer.spec
@@ -60,23 +83,11 @@ jobs:
           rm -rf .buildozer bin
           mkdir -p bin
 
-      - name: Preparar python-for-android com pip fixado
-        run: |
-          rm -rf "$RUNNER_TEMP/python-for-android"
-          git clone --depth 1 --branch master https://github.com/kivy/python-for-android.git "$RUNNER_TEMP/python-for-android"
-          P4A_BUILD="$RUNNER_TEMP/python-for-android/pythonforandroid/build.py"
-          test -f "$P4A_BUILD"
-          grep -n "pip install -U pip" "$P4A_BUILD"
-          sed -i "s/pip install -U pip/pip install 'pip<26.2'/g" "$P4A_BUILD"
-          echo "=== PATCH P4A ==="
-          grep -n "pip install.*pip" "$P4A_BUILD" | tail -5
-          echo "APP_P4A_SOURCE_DIR=$RUNNER_TEMP/python-for-android" >> "$GITHUB_ENV"
-
       - name: Compilar APK
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
           set -o pipefail
-          echo "Usando python-for-android corrigido em: $APP_P4A_SOURCE_DIR"
+          echo "Usando p4a local corrigido: $PWD/p4a"
           buildozer -v android debug 2>&1 | tee build_full.log
 
       - name: Diagnostico
@@ -87,9 +98,10 @@ jobs:
           python --version
           buildozer --version || true
           if [ -f build_full.log ]; then
+            echo "=== ERROS ==="
             grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError" build_full.log | tail -200 || true
             echo "=== PIP INTERNAL ==="
-            grep -nEi "Upgrade pip|Successfully installed pip|pip 26|pip<26|open_rich_spinner" build_full.log | tail -100 || true
+            grep -nEi "pip install.*pip|Successfully installed pip|pip 26|pip 25\.3|open_rich_spinner" build_full.log | tail -100 || true
             echo "=== NDK API ==="
             grep -n -- "--ndk-api=" build_full.log | tail -20 || true
           fi
@@ -102,7 +114,7 @@ jobs:
         with:
           name: GNV-V28.27-BUILD-LOG
           path: GNV_V28_27_ANDROID_BUILD_FIX/build_full.log
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload APK
         if: success()
