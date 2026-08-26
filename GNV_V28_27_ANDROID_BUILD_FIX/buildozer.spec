@@ -35,7 +35,8 @@ android.permissions = INTERNET
 
 android.debug_artifact = apk
 
-p4a.branch = master
+# Usa a cópia local do python-for-android preparada e corrigida pelo workflow.
+p4a.source_dir = p4a
 
 [buildozer]
 
