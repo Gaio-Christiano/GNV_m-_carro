@@ -11,11 +11,12 @@ source.include_exts = py,png,jpg,jpeg,kv,atlas,json,txt,csv
 
 source.exclude_dirs = .buildozer,bin,__pycache__,tests,p4a
 
-version = 28.27
+version = 28.28
 
-# Kivy 2.3.1 usa o pacote filetype em tempo de execução.
-# Sem ele o APK pode compilar normalmente e fechar imediatamente ao iniciar.
-requirements = python3==3.12.9,hostpython3==3.12.9,kivy==2.3.1,filetype==1.2.0,openpyxl,pillow
+# Dependências usadas diretamente pelo aplicativo Android.
+# fpdf2 é obrigatório: o aplicativo importa "from fpdf import FPDF" durante a inicialização.
+# Sem fpdf2 o APK compila, mas o Python falha no import e a Activity fecha imediatamente.
+requirements = python3==3.12.9,hostpython3==3.12.9,kivy==2.3.1,filetype==1.2.0,openpyxl,pillow,fpdf2
 
 orientation = portrait
 
