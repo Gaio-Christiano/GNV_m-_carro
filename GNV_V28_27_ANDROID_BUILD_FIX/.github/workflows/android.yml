@@ -2,6 +2,9 @@ name: Build APK Android - GNV V28.27
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -28,26 +31,26 @@ jobs:
           python -m pip install "Cython==0.29.33"
 
       - name: Check source
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: python -m py_compile main.py
 
       - name: Clean old build
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: rm -rf .buildozer bin
 
       - name: Bootstrap python-for-android checkout
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: buildozer android p4a -- --help
 
       - name: Patch p4a pip bootstrap
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('.buildozer/android/platform/python-for-android/pythonforandroid/build.py')
           s = p.read_text(encoding='utf-8')
           old = "source venv/bin/activate && pip install -U pip"
-          new = "source venv/bin/activate && python -m pip install -U \"pip<26.2\""
+          new = "source venv/bin/activate && python -m pip --version"
           if old not in s:
               raise SystemExit('Trecho p4a de atualização do pip não encontrado.')
           p.write_text(s.replace(old, new, 1), encoding='utf-8')
@@ -55,12 +58,12 @@ jobs:
           PY
 
       - name: Build APK
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: buildozer -v android debug
 
       - name: List APK
         if: always()
-        working-directory: GNV_V28_26_ANDROID_PACKAGE
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: find bin -type f -name '*.apk' -print || true
 
       - name: Upload APK
@@ -68,6 +71,27 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: GNV-V28.27-APK
-          path: GNV_V28_26_ANDROID_PACKAGE/bin/*.apk
+          path: GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
           if-no-files-found: error
 
+      - name: Collect build log
+        if: always()
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
+        run: |
+          {
+            echo "=== BUILD ENVIRONMENT ==="
+            python --version
+            python -m pip --version
+            echo "=== BUILDOZER SPEC ==="
+            cat buildozer.spec
+            echo "=== APK FILES ==="
+            find bin -type f -name '*.apk' -ls || true
+          } > build_diagnostic.txt
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GNV-V28.27-BUILD-DIAGNOSTIC
+          path: GNV_V28_27_ANDROID_BUILD_FIX/build_diagnostic.txt
+          if-no-files-found: error
