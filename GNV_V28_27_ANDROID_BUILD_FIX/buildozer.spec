@@ -13,7 +13,9 @@ source.exclude_dirs = .buildozer,bin,__pycache__,tests,p4a
 
 version = 28.27
 
-requirements = python3==3.12.9,hostpython3==3.12.9,kivy==2.3.1,openpyxl,pillow
+# Kivy 2.3.1 usa o pacote filetype em tempo de execução.
+# Sem ele o APK pode compilar normalmente e fechar imediatamente ao iniciar.
+requirements = python3==3.12.9,hostpython3==3.12.9,kivy==2.3.1,filetype==1.2.0,openpyxl,pillow
 
 orientation = portrait
 
