@@ -1,14 +1,17 @@
-# V28.31 - Android startup fix: SQLite late initialization
+# V28.32 - Android runtime fix
 #
-# O aplicativo era encerrado logo depois do splash. O sistema GNV cria o
-# SQLite durante build(), antes da primeira tela ficar disponível. No Android,
-# qualquer problema nessa operação pode matar a Activity antes de o usuario
-# enxergar o erro.
+# Corrige a arquitetura do launcher Android.
+# A versao anterior transformava dinamicamente AndroidLauncher em
+# MobileGNVApp com self.__class__ = original_class. Isso mistura o estado
+# interno de dois objetos Kivy App e pode encerrar a Activity durante a
+# inicializacao.
 #
-# Esta versao faz a inicializacao visual primeiro e inicializa o SQLite somente
-# depois que a janela Kivy esta rodando. O banco fica sempre em user_data_dir,
-# que e o armazenamento privado do aplicativo e nao exige permissao externa.
+# Agora o launcher continua sendo o App que executa o event loop. Ele cria
+# uma instancia NORMAL de MobileGNVApp, chama o build() dela e usa a arvore
+# retornada como root. Os callbacks continuam ligados ao objeto real do GNV.
+# O armazenamento e preparado antes do import do sistema principal.
 
+import os
 import traceback
 from pathlib import Path
 
@@ -20,7 +23,12 @@ from kivy.metrics import dp
 
 
 class AndroidLauncher(App):
-    """Bootstrap Android seguro para a inicializacao do sistema GNV."""
+    """Launcher Android sem troca dinamica de classe Kivy."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.gnv_app = None
+        self.status = None
 
     def build(self):
         root = BoxLayout(orientation="vertical", padding=dp(18))
@@ -34,113 +42,85 @@ class AndroidLauncher(App):
             size=lambda widget, size: setattr(widget, "text_size", size)
         )
         root.add_widget(self.status)
-        Clock.schedule_once(self._load_gnv, 0.25)
+
+        # Primeiro cria a Window/SDL2. Depois carrega o aplicativo grande.
+        Clock.schedule_once(self._start_gnv, 0.50)
         return root
 
-    def _write_error(self, text):
+    def _app_dir(self):
+        base = Path(self.user_data_dir)
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+
+    def _write_error(self, title, text):
         try:
-            base = Path(self.user_data_dir)
-            base.mkdir(parents=True, exist_ok=True)
-            (base / "gnv_startup_error.log").write_text(text, encoding="utf-8")
+            base = self._app_dir()
+            path = base / "gnv_startup_error.log"
+            path.write_text(title + "\n\n" + text, encoding="utf-8")
         except Exception:
             pass
 
-    def _load_gnv(self, _dt):
-        try:
-            self.status.text = "Carregando o sistema GNV..."
-            import GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z as module
-
-            original_class = module.MobileGNVApp
-            banco_class = module.BancoGNV
-            original_build = original_class.build
-
-            # -------------------------------------------------------------
-            # IMPORTANTE: a classe original cria/conecta o SQLite no inicio
-            # do build(). No Android, fazemos essa parte depois da primeira
-            # tela para que um problema no banco nao derrube a Activity.
-            # -------------------------------------------------------------
-            original_connect = banco_class.conectar
-            original_create_table = banco_class.criar_tabela
-            original_create_indexes = banco_class.criar_indices
-
-            banco_class.conectar = lambda self: None
-            banco_class.criar_tabela = lambda self: None
-            banco_class.criar_indices = lambda self: None
-
-            # O App ja esta rodando. Trocar a classe exige executar o
-            # construtor original; a versao anterior nao fazia isso.
-            self.__class__ = original_class
-            original_class.__init__(self)
-            root = original_build(self)
-            self.root = root
-
-            # Restaura os metodos originais antes da inicializacao real.
-            banco_class.conectar = original_connect
-            banco_class.criar_tabela = original_create_table
-            banco_class.criar_indices = original_create_indexes
-
-            # Inicializa o SQLite somente agora, com a janela ja ativa.
-            Clock.schedule_once(self._init_database_after_ui, 0.10)
-
-        except BaseException:
-            error = traceback.format_exc()
-            self._write_error(error)
-            self._show_error(error)
-
-    def _init_database_after_ui(self, _dt):
-        try:
-            self.status.text = "Inicializando banco de dados..."
-
-            # MobileGNVApp.build() ja criou base_dir/db_path e BancoGNV.
-            self.banco.conectar()
-            self.banco.criar_tabela()
-            self.banco.criar_indices()
-
-            # Atualiza as telas que dependem do banco depois da conexao.
-            if hasattr(self, "_refresh_all"):
-                self._refresh_all()
-
-            if hasattr(self, "_apply_all_visual_now"):
-                Clock.schedule_once(lambda __dt: self._apply_all_visual_now(), 0)
-
-        except BaseException:
-            error = traceback.format_exc()
-            self._write_error("ERRO SQLITE / ARMAZENAMENTO ANDROID\n\n" + error)
-
-            # Mantem o aplicativo aberto para mostrar o erro em vez de fechar.
-            try:
-                if hasattr(self, "sqlite_result"):
-                    self.sqlite_result.set_text(
-                        "ERRO AO INICIALIZAR O BANCO SQLITE NO ANDROID:\n\n" + error
-                    )
-                self.status.text = "ERRO NO BANCO SQLITE - aplicativo mantido aberto para diagnostico"
-            except Exception:
-                self._show_error(error)
-
-    def _show_error(self, error):
+    def _show_error(self, title, text):
         root = BoxLayout(
             orientation="vertical", padding=dp(12), spacing=dp(8)
         )
         root.add_widget(
             Label(
-                text="ERRO AO INICIAR O SISTEMA GNV",
+                text=title,
                 size_hint_y=None,
-                height=dp(55),
+                height=dp(60),
                 bold=True,
-                font_size=dp(18),
+                font_size=dp(17),
             )
         )
-        message = Label(
-            text=error,
-            halign="left",
-            valign="top",
-            font_size=dp(10),
-        )
-        message.bind(
-            size=lambda widget, size: setattr(widget, "text_size", size)
-        )
-        root.add_widget(message)
+        msg = Label(text=text, halign="left", valign="top", font_size=dp(10))
+        msg.bind(size=lambda widget, size: setattr(widget, "text_size", size))
+        root.add_widget(msg)
         self.root = root
+
+    def _start_gnv(self, _dt):
+        try:
+            self.status.text = "Preparando armazenamento..."
+            base = self._app_dir()
+
+            # Todo caminho relativo usado pelo sistema passa a apontar para
+            # o armazenamento privado do aplicativo.
+            os.chdir(base)
+            os.environ["GNV_APP_DATA_DIR"] = str(base)
+
+            self.status.text = "Carregando sistema GNV..."
+
+            # Import tardio: o modulo principal importa Window/SDL2 e somente
+            # deve ser carregado depois que o primeiro ciclo Kivy ja iniciou.
+            import importlib
+            module = importlib.import_module(
+                "GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z"
+            )
+
+            # INSTANCIA REAL: nao usamos __class__ para transformar o launcher.
+            gnv = module.MobileGNVApp()
+            self.gnv_app = gnv
+            module.MobileGNVApp.instance = gnv
+
+            self.status.text = "Inicializando banco e interface..."
+
+            # O build original ja usa App.user_data_dir para criar:
+            #   gnv_dados.db
+            #   configuracoes.json
+            # Portanto nao e necessaria permissao de armazenamento externo.
+            root = gnv.build()
+            if root is None:
+                raise RuntimeError("MobileGNVApp.build() retornou None")
+
+            self.root = root
+
+            # Mantem a instancia real disponivel para eventuais callbacks.
+            self.gnv_app.root = root
+
+        except BaseException:
+            error = traceback.format_exc()
+            self._write_error("ERRO AO INICIAR SISTEMA GNV", error)
+            self._show_error("ERRO AO INICIAR O SISTEMA GNV", error)
 
 
 if __name__ == "__main__":
