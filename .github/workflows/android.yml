@@ -75,6 +75,15 @@ jobs:
           p.write_text(s.replace(old, new))
           print("Patch aplicado: NÃO atualizar pip dentro do venv do p4a")
           PY
+
+          # Savannah está devolvendo HTTP 502 para o runner do GitHub.
+          # Use o mirror oficial da Savannah para o recipe do FreeType.
+          FREETYPE_RECIPE="$PWD/p4a/pythonforandroid/recipes/freetype/__init__.py"
+          test -f "$FREETYPE_RECIPE"
+          sed -i 's#https://download.savannah.gnu.org/releases/freetype/#https://download-mirror.savannah.gnu.org/releases/freetype/#g' "$FREETYPE_RECIPE"
+          echo "=== URL FREETYPE ==="
+          grep -n "url =\|download.*freetype" "$FREETYPE_RECIPE" | head -10
+
           echo "=== LINHA CORRIGIDA ==="
           grep -n "pip.*version\|pip install.*pip" "$P4A_BUILD" | tail -5
 
@@ -104,7 +113,7 @@ jobs:
           buildozer --version || true
           if [ -f build_full.log ]; then
             echo "=== ERROS ==="
-            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError|ModuleNotFoundError" build_full.log | tail -200 || true
+            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError|ModuleNotFoundError|HTTP Error 5" build_full.log | tail -200 || true
             echo "=== RUNTIME DEPENDENCIES ==="
             grep -nEi "filetype|Successfully installed|ModuleNotFoundError|ImportError" build_full.log | tail -100 || true
             echo "=== PIP INTERNAL ==="
