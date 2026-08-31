@@ -1,303 +1,350 @@
-# V28.36 - Android: GUI primeiro, diagnóstico por etapas e PDF sob demanda
+# V28.37 - Android: inicializacao segura, UI primeiro e abas sob demanda
 #
-# OBJETIVO:
-# 1) A primeira coisa visível no celular é a interface "Loading...".
-# 2) O programa principal só é importado DEPOIS que o Kivy já colocou essa tela.
-# 3) O SQLite real só é aberto DEPOIS da interface principal estar visível.
-# 4) Arquivos usam o armazenamento privado do aplicativo; não dependem de /sdcard.
-# 5) Falhas de importação, armazenamento ou SQLite ficam visíveis na tela e
-#    também são gravadas em startup_error.log.
-# 6) fpdf2 NÃO é importado durante o startup. Um proxy carrega fpdf2 somente
-#    quando o código realmente instancia FPDF para gerar um relatório PDF.
+# Objetivo desta versao:
+# 1) Mostrar a interface imediatamente.
+# 2) Nao construir as 12 abas durante o primeiro frame.
+# 3) Usar SQLite em memoria durante a subida da interface.
+# 4) Abrir o SQLite persistente somente depois que a UI estiver visivel.
+# 5) Carregar cada aba somente quando o usuario a selecionar.
+# 6) Registrar etapas de inicializacao em startup_android.log.
 #
-# Esta versão substitui o comportamento "abre e fecha" por um diagnóstico
-# persistente. Se alguma etapa falhar, o APK permanece aberto mostrando o erro.
+# O codigo do sistema original continua em
+# GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py.
 
 import os
-import sys
 import sqlite3
 import traceback
-import types
 from pathlib import Path
 
 from kivy.app import App
 from kivy.clock import Clock
-from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
 
 
-APP_NAME = "Sistema GNV"
-_STORAGE = None
-_STORAGE_ERROR = None
+IMPORT_ERROR = None
+APP_MODULE = None
+MobileGNVApp = None
 
 
-# ---------------------------------------------------------------------------
-# 1. Armazenamento privado Android
-# ---------------------------------------------------------------------------
-try:
-    from android.storage import app_storage_path
-
-    _STORAGE = Path(app_storage_path())
-    _STORAGE.mkdir(parents=True, exist_ok=True)
-    os.chdir(_STORAGE)
-    os.environ["HOME"] = str(_STORAGE)
-    os.environ["XDG_CONFIG_HOME"] = str(_STORAGE / ".config")
-    os.environ["XDG_DATA_HOME"] = str(_STORAGE / ".local" / "share")
-    Path(os.environ["XDG_CONFIG_HOME"]).mkdir(parents=True, exist_ok=True)
-    Path(os.environ["XDG_DATA_HOME"]).mkdir(parents=True, exist_ok=True)
-except BaseException as exc:
-    _STORAGE_ERROR = exc
+def _safe_storage(app=None):
+    """Retorna um diretorio privado e gravavel do aplicativo."""
+    try:
+        if app is not None and getattr(app, "user_data_dir", None):
+            base = Path(app.user_data_dir)
+        else:
+            base = Path.cwd() / "data"
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+    except Exception:
+        return Path.cwd()
 
 
-# ---------------------------------------------------------------------------
-# 2. fpdf2 sob demanda
-#
-# O programa legado contém "from fpdf import FPDF" no topo. Para impedir que
-# uma falha do fpdf2 mate o aplicativo durante o startup, instalamos aqui um
-# módulo proxy. A biblioteca real só será importada quando FPDF(...) for
-# executado, isto é, quando o usuário realmente gerar um PDF.
-# ---------------------------------------------------------------------------
-class _LazyFPDF:
-    def __new__(cls, *args, **kwargs):
-        proxy = sys.modules.pop("fpdf", None)
-        try:
-            from fpdf import FPDF as RealFPDF
-            return RealFPDF(*args, **kwargs)
-        finally:
-            # Se o import real não deixou o pacote carregado, restaura o proxy
-            # para que o erro seja apresentado pelo diagnóstico em vez de sumir.
-            if "fpdf" not in sys.modules and proxy is not None:
-                sys.modules["fpdf"] = proxy
+class AndroidLauncher(App):
+    """Bootstrap Android: interface primeiro, sistema depois."""
 
-
-_lazy_fpdf_module = types.ModuleType("fpdf")
-_lazy_fpdf_module.FPDF = _LazyFPDF
-_lazy_fpdf_module.__doc__ = "Lazy fpdf2 proxy used by the Android bootstrap."
-sys.modules["fpdf"] = _lazy_fpdf_module
-
-
-# ---------------------------------------------------------------------------
-# 3. Tela inicial. Esta tela precisa aparecer ANTES do import do sistema GNV.
-# ---------------------------------------------------------------------------
-class AndroidBootstrap(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.status_label = None
-        self.detail_label = None
-        self.real_app = None
-        self.original_conectar = None
-        self.app_module = None
+        self.status = None
+        self.details = None
+        self.log_path = None
+        self._base = None
+        self._real_db_ready = False
+        self._built_tabs = set()
 
-    def _set_status(self, text, detail=""):
-        if self.status_label is not None:
-            self.status_label.text = text
-        if self.detail_label is not None:
-            self.detail_label.text = detail
-
-    def _write_log(self, text):
+    def _log(self, message):
+        """Atualiza a tela e grava o mesmo passo em log persistente."""
+        text = str(message)
+        print(text, flush=True)
         try:
-            base = _STORAGE or Path(self.user_data_dir)
-            base.mkdir(parents=True, exist_ok=True)
-            (base / "startup_error.log").write_text(text, encoding="utf-8")
-        except BaseException:
+            if self.status is not None:
+                self.status.text = text
+            if self.log_path is not None:
+                with self.log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(text + "\n")
+        except Exception:
             pass
 
-    def _show_error(self, stage, exc):
-        text = "\n".join([
-            "ERRO DE INICIALIZAÇÃO DO SISTEMA GNV",
-            "",
-            f"ETAPA: {stage}",
-            f"TIPO: {type(exc).__name__}",
-            f"MENSAGEM: {exc}",
-            "",
-            "TRACEBACK:",
-            traceback.format_exc(),
-        ])
-        if _STORAGE is not None:
-            text += f"\n\nARMAZENAMENTO PRIVADO:\n{_STORAGE}"
-        if _STORAGE_ERROR is not None:
-            text += (
-                "\n\nERRO AO PREPARAR ARMAZENAMENTO:\n"
-                f"{type(_STORAGE_ERROR).__name__}: {_STORAGE_ERROR}"
-            )
-        self._write_log(text)
-        self._set_status("ERRO - O aplicativo permaneceu aberto", text)
+    def _error(self, etapa, exc):
+        """Mantem o APK aberto ao ocorrer uma excecao Python."""
+        bloco = (
+            f"\nERRO NA ETAPA: {etapa}\n"
+            f"TIPO: {type(exc).__name__}\n"
+            f"MENSAGEM: {exc}\n\n"
+            f"{traceback.format_exc()}"
+        )
+        self._log(bloco)
+        try:
+            if self.details is not None:
+                self.details.text = bloco
+        except Exception:
+            pass
 
     def build(self):
-        self.title = APP_NAME
+        self.title = "Sistema de Cálculos e Análise da Capacidade do Cilindro de GNV"
 
-        root = BoxLayout(
-            orientation="vertical",
-            padding=32,
-            spacing=18,
-        )
-
-        root.add_widget(Label(
+        # A primeira coisa que o usuario recebe e uma tela Kivy real.
+        root = BoxLayout(orientation="vertical", padding=20, spacing=14)
+        title = Label(
             text="SISTEMA DE CÁLCULOS DE GNV",
-            font_size="24sp",
-            halign="center",
-            valign="middle",
+            font_size="22sp",
+            bold=True,
             size_hint_y=None,
-            height=70,
-        ))
-
-        self.status_label = Label(
-            text="Loading...",
-            font_size="28sp",
-            halign="center",
-            valign="middle",
-            size_hint_y=None,
-            height=70,
+            height="60dp",
         )
-        root.add_widget(self.status_label)
-
-        self.detail_label = Label(
-            text="Etapa 1/7 - Interface gráfica iniciada.\nAguarde...",
-            font_size="16sp",
+        self.status = Label(
+            text="Loading...",
+            font_size="18sp",
+            size_hint_y=None,
+            height="50dp",
+        )
+        self.details = Label(
+            text="Iniciando o sistema...",
+            font_size="13sp",
             halign="left",
             valign="top",
         )
-        root.add_widget(self.detail_label)
+        self.details.bind(size=lambda w, *_: setattr(w, "text_size", w.size))
+        root.add_widget(title)
+        root.add_widget(self.status)
+        root.add_widget(self.details)
 
-        # O import pesado só acontece depois que esta tela já foi entregue ao
-        # loop gráfico do Kivy.
-        Clock.schedule_once(self._start_diagnostics, 0.20)
+        self._base = _safe_storage(self)
+        self.log_path = self._base / "startup_android.log"
+        try:
+            self.log_path.write_text("V28.37\n", encoding="utf-8")
+        except Exception:
+            pass
+
+        # So agora, com a UI entregue ao Kivy, comecamos a inicializacao.
+        Clock.schedule_once(self._initialize_after_ui, 0.20)
         return root
 
-    def _start_diagnostics(self, _dt):
+    def _initialize_after_ui(self, _dt):
         try:
-            self._set_status(
-                "Loading...",
-                "Etapa 2/7 - Testando armazenamento privado Android...",
-            )
-            if _STORAGE_ERROR is not None:
-                raise RuntimeError(
-                    f"Não foi possível preparar o armazenamento privado: {_STORAGE_ERROR}"
-                )
+            self._log("ETAPA 1/8 - Interface Kivy carregada")
 
-            test_file = _STORAGE / ".gnv_storage_test"
-            test_file.write_text("GNV Android OK", encoding="utf-8")
-            if test_file.read_text(encoding="utf-8") != "GNV Android OK":
-                raise IOError("Falha na leitura do arquivo de teste")
+            # Importar o modulo original somente depois da UI estar visivel.
+            self._log("ETAPA 2/8 - Carregando modulo principal")
+            global APP_MODULE, MobileGNVApp
+            try:
+                import GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z as APP_MODULE
+                MobileGNVApp = APP_MODULE.MobileGNVApp
+            except BaseException as exc:
+                global IMPORT_ERROR
+                IMPORT_ERROR = exc
+                raise
+
+            self._log("ETAPA 3/8 - Modulo principal carregado")
+
+            # Banco temporario em memoria para permitir que a UI seja montada
+            # sem depender de qualquer arquivo externo.
+            self._log("ETAPA 4/8 - Inicializando SQLite temporario")
+            self.banco = APP_MODULE.BancoGNV(":memory:")
+            self.banco.conectar()
+            self.banco.criar_tabela()
+            self.banco.criar_indices()
+            self._real_db_ready = False
+
+            self._log("ETAPA 5/8 - Construindo somente a aba Cálculos")
+            self._create_shell_for_gnv()
+            self._ensure_tab(0)
+
+            self._log("ETAPA 6/8 - Interface principal visível")
+            Clock.schedule_once(self._initialize_real_database, 0.50)
+            Clock.schedule_once(self._apply_first_visuals, 0.60)
+
+        except BaseException as exc:
+            self._error("inicializacao", exc)
+
+    def _create_shell_for_gnv(self):
+        """Replica somente a infraestrutura leve do build original."""
+        base_class = APP_MODULE.MobileGNVApp
+        # Inicializa apenas atributos necessários às telas existentes.
+        self.idioma = "pt-BR"
+        self.base_dir = self._base
+        self.db_path = str(self._base / "gnv_dados.db")
+        self.config_path = self._base / "configuracoes.json"
+        self.formula_pt = base_class._load_formula_pt(self)
+        self.colors = base_class._default_colors(self)
+        self._colors_personalizadas = False
+        self._visual_ready = False
+
+        self.sm = APP_MODULE.ScreenManager()
+        self.screen_names = []
+        keys = APP_MODULE.MOBILE_TABS.get(self.idioma, APP_MODULE.MOBILE_TABS["pt-BR"])
+        for i, key in enumerate(keys):
+            name = f"screen_{i}"
+            self.screen_names.append(name)
+            self.sm.add_widget(APP_MODULE.MobileScreen(key, name=name))
+
+        root = BoxLayout(orientation="vertical", spacing=APP_MODULE.dp(4), padding=APP_MODULE.dp(5))
+        self.header = Label(
+            text=APP_MODULE.APP_TITLE,
+            size_hint_y=None,
+            height=APP_MODULE.dp(42),
+            font_size=APP_MODULE.sp(15),
+            bold=True,
+        )
+        root.add_widget(self.header)
+
+        nav = BoxLayout(size_hint_y=None, height=APP_MODULE.dp(46), spacing=APP_MODULE.dp(4))
+        self.tab_spinner = APP_MODULE.Spinner(
+            text="Cálculos",
+            values=tuple(self.screen_names_for_language()),
+            size_hint_x=0.78,
+        )
+        self.tab_spinner.bind(text=self._go_from_spinner)
+        nav.add_widget(self.tab_spinner)
+        self.lang_spinner = APP_MODULE.Spinner(
+            text="pt-BR",
+            values=APP_MODULE.IDIOMAS_DISPONIVEIS,
+            size_hint_x=0.22,
+        )
+        self.lang_spinner.bind(text=self.change_language)
+        nav.add_widget(self.lang_spinner)
+        root.add_widget(nav)
+        root.add_widget(self.sm)
+
+        self.footer = Label(
+            text="Analista de Sistemas e Pesquisador - Christiano T.Gaio - Desenvolvedor | Projeto iniciado o Desenvolvimento em 06/2026",
+            size_hint_y=None,
+            height=APP_MODULE.dp(34),
+            font_size=APP_MODULE.sp(9),
+            halign="center",
+            valign="middle",
+        )
+        self.footer.bind(size=lambda w, *_: setattr(w, "text_size", w.size))
+        root.add_widget(self.footer)
+
+        self.root = root
+
+    def screen_names_for_language(self):
+        return APP_MODULE.MOBILE_TABS.get(self.idioma, APP_MODULE.MOBILE_TABS["pt-BR"])
+
+    def _ensure_tab(self, idx):
+        """Constroi uma aba somente na primeira vez que for acessada."""
+        if idx in self._built_tabs:
+            return True
+        methods = (
+            "_build_calculos",
+            "_build_abastecimentos",
+            "_build_anp",
+            "_build_compressao",
+            "_build_historico",
+            "_build_sqlite",
+            "_build_excel",
+            "_build_graficos",
+            "_build_config",
+            "_build_formulas",
+            "_build_total",
+            "_build_creditos",
+        )
+        if idx < 0 or idx >= len(methods):
+            raise IndexError(f"Aba inválida: {idx}")
+        self._log(f"ABRINDO ABA {idx + 1}/12 - {self.screen_names_for_language()[idx]}")
+        getattr(self, methods[idx])()
+        self._built_tabs.add(idx)
+        try:
+            self._apply_result_styles_to_all_tabs()
+        except Exception:
+            pass
+        return True
+
+    def _go_from_spinner(self, _spinner, text):
+        try:
+            names = self.screen_names_for_language()
+            idx = names.index(text)
+            self._ensure_tab(idx)
+            self.sm.current = self.screen_names[idx]
+            try:
+                self._apply_language()
+            except Exception:
+                pass
+        except BaseException as exc:
+            self._error(f"abrir aba {text}", exc)
+
+    def change_language(self, _spinner, idioma):
+        try:
+            self.idioma = idioma
+            current = self.sm.current
+            self.tab_spinner.values = tuple(self.screen_names_for_language())
+            idx = self.screen_names.index(current)
+            self._ensure_tab(idx)
+            self.tab_spinner.text = self.screen_names_for_language()[idx]
+            self._apply_language()
+            Clock.schedule_once(lambda _dt: self._apply_colors(), 0)
+            try:
+                self._save_config()
+            except Exception:
+                pass
+        except BaseException as exc:
+            self._error("troca de idioma", exc)
+
+    def _apply_first_visuals(self, _dt):
+        try:
+            self._apply_language()
+            self._mark_visual_ready()
+            self._log("ETAPA 7/8 - Visual aplicado")
+        except BaseException as exc:
+            self._error("aplicacao visual", exc)
+
+    def _initialize_real_database(self, _dt):
+        try:
+            self._log("ETAPA 8/8 - Abrindo SQLite persistente")
+            real_path = Path(self.db_path)
+            real_path.parent.mkdir(parents=True, exist_ok=True)
+
+            test_file = real_path.parent / ".storage_test"
+            test_file.write_text("ok", encoding="utf-8")
             test_file.unlink(missing_ok=True)
 
-            self._set_status(
-                "Loading...",
-                "Etapa 3/7 - Armazenamento OK. Importando sistema GNV...",
-            )
-            Clock.schedule_once(self._import_main_program, 0.05)
-        except BaseException as exc:
-            self._show_error("2/7 - armazenamento privado", exc)
+            real_db = APP_MODULE.BancoGNV(str(real_path))
+            real_db.conectar()
+            real_db.criar_tabela()
+            real_db.criar_indices()
 
-    def _import_main_program(self, _dt):
-        try:
-            # Importação tardia: o usuário já vê a GUI antes de qualquer
-            # import pesado do programa principal, inclusive openpyxl/fpdf2.
-            import importlib
-            self.app_module = importlib.import_module(
-                "GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z"
-            )
-
-            if not hasattr(self.app_module, "MobileGNVApp"):
-                raise AttributeError("MobileGNVApp não foi encontrado no programa principal")
-
-            self._set_status(
-                "Loading...",
-                "Etapa 4/7 - Programa principal carregado. Preparando SQLite em memória...",
-            )
-            Clock.schedule_once(self._build_main_interface, 0.05)
-        except BaseException as exc:
-            self._show_error("3/7 - importação do programa principal", exc)
-
-    def _build_main_interface(self, _dt):
-        banco_cls = None
-        try:
-            banco_cls = self.app_module.BancoGNV
-            self.original_conectar = banco_cls.conectar
-
-            def conectar_temporario(banco):
-                banco.conexao = sqlite3.connect(":memory:")
-                banco.cursor = banco.conexao.cursor()
-
-            banco_cls.conectar = conectar_temporario
-
-            self._set_status(
-                "Loading...",
-                "Etapa 5/7 - Construindo a interface gráfica (SQLite real ainda não foi aberto)...",
-            )
-
-            self.real_app = self.app_module.MobileGNVApp()
-            root = self.real_app.build()
-
-            # A interface principal agora substitui a tela de diagnóstico.
-            self.root = root
-
-            self._set_status(
-                "Sistema carregado",
-                "Etapa 6/7 - Interface gráfica pronta. Inicializando banco persistente...",
-            )
-
-            Clock.schedule_once(self._open_real_database, 0.20)
-        except BaseException as exc:
-            self._show_error("5/7 - construção da interface gráfica", exc)
-        finally:
-            if banco_cls is not None and self.original_conectar is not None:
-                banco_cls.conectar = self.original_conectar
-
-    def _open_real_database(self, _dt):
-        try:
-            app = self.real_app
-            base = _STORAGE or Path(app.user_data_dir)
-            base.mkdir(parents=True, exist_ok=True)
-
-            self._set_status(
-                "Sistema carregado",
-                "Etapa 7/7 - Testando e abrindo banco SQLite persistente...",
-            )
-
-            db_path = base / "gnv_dados.db"
-            config_path = base / "configuracoes.json"
-            app.db_path = str(db_path)
-            app.config_path = config_path
-            app.base_dir = base
-
-            if not hasattr(app, "banco"):
-                raise AttributeError("A aplicação principal não criou o objeto BancoGNV")
-
-            app.banco.nome_banco = str(db_path)
-            if getattr(app.banco, "conexao", None) is not None:
+            old = getattr(self, "banco", None)
+            self.banco = real_db
+            self._real_db_ready = True
+            if old is not None:
                 try:
-                    app.banco.conexao.close()
-                except BaseException:
+                    old.conexao.close()
+                except Exception:
                     pass
 
-            app.banco.conectar()
-            app.banco.criar_tabela()
-            app.banco.criar_indices()
-
-            # Atualizações opcionais das telas. Um erro visual em uma aba não
-            # pode derrubar o aplicativo inteiro.
+            # Atualiza somente as abas que ja foram criadas.
             for method_name in (
                 "_refresh_history",
                 "_refresh_sqlite",
                 "_refresh_total",
                 "_refresh_chart",
             ):
-                method = getattr(app, method_name, None)
+                method = getattr(self, method_name, None)
                 if callable(method):
                     try:
                         method()
-                    except BaseException:
+                    except Exception:
                         pass
 
-            self._set_status(
-                "Sistema pronto",
-                "Inicialização concluída. Banco SQLite em armazenamento privado do aplicativo.",
-            )
-
+            self._log("SISTEMA PRONTO - SQLite persistente ativo")
+            if self.details is not None:
+                self.details.text = "Sistema pronto. A aba Cálculos foi carregada. As demais abas serão carregadas quando selecionadas."
         except BaseException as exc:
-            self._show_error("7/7 - SQLite persistente", exc)
+            # SQLite/storage nao pode encerrar o aplicativo.
+            self._error("SQLite persistente", exc)
+            if self.details is not None:
+                self.details.text = "A interface continua funcionando, mas o banco persistente apresentou erro. Veja startup_android.log."
+
+    # Encaminhamento dos metodos de instancia para o modulo original.
+    def __getattr__(self, name):
+        # Evita duplicar centenas de metodos do sistema original.
+        if APP_MODULE is not None:
+            cls = getattr(APP_MODULE, "MobileGNVApp", None)
+            if cls is not None and hasattr(cls, name):
+                return getattr(cls, name).__get__(self, type(self))
+        raise AttributeError(name)
 
 
 if __name__ == "__main__":
-    AndroidBootstrap().run()
+    AndroidLauncher().run()
