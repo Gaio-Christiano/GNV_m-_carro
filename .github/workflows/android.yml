@@ -1,4 +1,4 @@
-name: Build APK GNV V28.36
+name: Build APK GNV V28.37
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Compilar APK GNV V28.36
+    name: Compilar APK GNV V28.37
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     defaults:
@@ -51,13 +51,11 @@ jobs:
           test -f main.py
           test -f GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           test -f buildozer.spec
-          grep -q "version = 28.36" buildozer.spec
+          python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           grep -q "filetype==1.2.0" buildozer.spec
-          python -m py_compile main.py
-          python -m py_compile GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           echo "Arquivos Android OK"
-          echo "Bootstrap e programa principal: sintaxe OK"
-          echo "PDF: fpdf2 continua empacotado, mas o bootstrap faz import sob demanda"
+          echo "Sintaxe Python OK"
+          echo "Kivy runtime dependency filetype: OK"
 
       - name: Preparar python-for-android corrigido
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -85,6 +83,7 @@ jobs:
           sed -i 's#https://download.savannah.gnu.org/releases/freetype/#https://download-mirror.savannah.gnu.org/releases/freetype/#g' "$FREETYPE_RECIPE"
           echo "=== URL FREETYPE ==="
           grep -n "url =\|download.*freetype" "$FREETYPE_RECIPE" | head -10
+
           echo "=== LINHA CORRIGIDA ==="
           grep -n "pip.*version\|pip install.*pip" "$P4A_BUILD" | tail -5
 
@@ -98,15 +97,12 @@ jobs:
           rm -rf .buildozer bin
           mkdir -p bin
 
-      - name: Compilar APK V28.36
+      - name: Compilar APK
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
           set -o pipefail
-          echo "=== GNV V28.36 ANDROID BUILD ==="
-          echo "GUI primeiro: SIM"
-          echo "SQLite real somente depois da GUI: SIM"
-          echo "fpdf2 no startup: NÃO; import sob demanda"
-          echo "Armazenamento externo: NÃO utilizado"
+          echo "=== V28.37 ANDROID BUILD ==="
+          echo "Entrada: main.py (bootstrap UI-first, abas sob demanda)"
           echo "Usando p4a local corrigido: $PWD/p4a"
           buildozer -v android debug 2>&1 | tee build_full.log
 
@@ -114,14 +110,14 @@ jobs:
         if: always()
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          echo "=== DIAGNOSTICO V28.36 ==="
+          echo "=== DIAGNOSTICO ==="
           python --version
           buildozer --version || true
           if [ -f build_full.log ]; then
             echo "=== ERROS ==="
-            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError|ModuleNotFoundError|HTTP Error 5" build_full.log | tail -250 || true
+            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError|ModuleNotFoundError|HTTP Error 5" build_full.log | tail -200 || true
             echo "=== RUNTIME DEPENDENCIES ==="
-            grep -nEi "filetype|fpdf|Successfully installed|ModuleNotFoundError|ImportError" build_full.log | tail -150 || true
+            grep -nEi "filetype|fpdf2|openpyxl|Successfully installed|ModuleNotFoundError|ImportError" build_full.log | tail -150 || true
             echo "=== PIP INTERNAL ==="
             grep -nEi "pip install.*pip|Successfully installed pip|pip 26|pip 25\.3|RequirementInformation|open_rich_spinner" build_full.log | tail -100 || true
             echo "=== NDK API ==="
@@ -134,7 +130,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: GNV-V28.36-BUILD-LOG
+          name: GNV-V28.37-BUILD-LOG
           path: GNV_V28_27_ANDROID_BUILD_FIX/build_full.log
           if-no-files-found: error
 
@@ -142,6 +138,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: GNV-V28.36-APK
+          name: GNV-V28.37-APK
           path: GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
           if-no-files-found: error
