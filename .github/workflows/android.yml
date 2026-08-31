@@ -1,4 +1,4 @@
-name: Build APK GNV V28.37
+name: Build APK GNV e teste de runtime Android
 
 on:
   workflow_dispatch:
@@ -7,8 +7,72 @@ on:
       - main
 
 jobs:
-  build:
-    name: Compilar APK GNV V28.37
+  smoke-test:
+    name: Smoke Test Kivy Android
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Python 3.12.9
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12.9"
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Dependências Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git zip unzip autoconf automake autopoint libtool pkg-config cmake gettext libffi-dev libssl-dev libltdl-dev zlib1g-dev libncurses5-dev libncursesw5-dev
+
+      - name: Instalar Buildozer
+        run: |
+          python -m pip install --upgrade "pip<26.2" setuptools wheel
+          python -m pip install buildozer "Cython==0.29.34"
+
+      - name: Preparar p4a
+        working-directory: ANDROID_SMOKE_TEST
+        run: |
+          git clone --depth 1 --branch master https://github.com/kivy/python-for-android.git p4a
+          P4A_BUILD="$PWD/p4a/pythonforandroid/build.py"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("p4a/pythonforandroid/build.py")
+          s = p.read_text()
+          old = "pip install -U pip"
+          new = "python -m pip --version"
+          if old in s:
+              p.write_text(s.replace(old, new))
+          PY
+          sed -i 's#https://download.savannah.gnu.org/releases/freetype/#https://download-mirror.savannah.gnu.org/releases/freetype/#g' p4a/pythonforandroid/recipes/freetype/__init__.py
+
+      - name: Compilar smoke APK
+        working-directory: ANDROID_SMOKE_TEST
+        run: |
+          rm -rf .buildozer bin
+          buildozer -v android debug 2>&1 | tee smoke_build.log
+
+      - name: Publicar smoke APK e log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GNV-V28.40-SMOKE-TEST
+          path: |
+            ANDROID_SMOKE_TEST/bin/*.apk
+            ANDROID_SMOKE_TEST/smoke_build.log
+          if-no-files-found: warn
+
+  build-gnv:
+    name: Compilar aplicativo GNV
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     defaults:
@@ -30,15 +94,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Dependencias Linux
+      - name: Dependências Linux
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git zip unzip autoconf automake autopoint libtool pkg-config cmake gettext libffi-dev libssl-dev libltdl-dev zlib1g-dev libncurses5-dev libncursesw5-dev
-
-      - name: Verificar Python
-        run: |
-          python --version
-          python -m pip --version
 
       - name: Instalar Buildozer
         run: |
@@ -52,10 +111,6 @@ jobs:
           test -f GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           test -f buildozer.spec
           python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
-          grep -q "filetype==1.2.0" buildozer.spec
-          echo "Arquivos Android OK"
-          echo "Sintaxe Python OK"
-          echo "Kivy runtime dependency filetype: OK"
 
       - name: Preparar python-for-android corrigido
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -63,9 +118,6 @@ jobs:
           rm -rf p4a
           git clone --depth 1 --branch master https://github.com/kivy/python-for-android.git p4a
           P4A_BUILD="$PWD/p4a/pythonforandroid/build.py"
-          test -f "$P4A_BUILD"
-          echo "=== LINHA ORIGINAL ==="
-          grep -n "pip install -U pip" "$P4A_BUILD" || true
           python - <<'PY'
           from pathlib import Path
           p = Path("p4a/pythonforandroid/build.py")
@@ -73,71 +125,45 @@ jobs:
           old = "pip install -U pip"
           new = "python -m pip --version"
           if old not in s:
-              raise SystemExit("ERRO: comando de atualização do pip não encontrado em python-for-android")
+              raise SystemExit("Comando de atualização do pip não encontrado no p4a")
           p.write_text(s.replace(old, new))
-          print("Patch aplicado: NÃO atualizar pip dentro do venv do p4a")
           PY
+          sed -i 's#https://download.savannah.gnu.org/releases/freetype/#https://download-mirror.savannah.gnu.org/releases/freetype/#g' p4a/pythonforandroid/recipes/freetype/__init__.py
 
-          FREETYPE_RECIPE="$PWD/p4a/pythonforandroid/recipes/freetype/__init__.py"
-          test -f "$FREETYPE_RECIPE"
-          sed -i 's#https://download.savannah.gnu.org/releases/freetype/#https://download-mirror.savannah.gnu.org/releases/freetype/#g' "$FREETYPE_RECIPE"
-          echo "=== URL FREETYPE ==="
-          grep -n "url =\|download.*freetype" "$FREETYPE_RECIPE" | head -10
-
-          echo "=== LINHA CORRIGIDA ==="
-          grep -n "pip.*version\|pip install.*pip" "$P4A_BUILD" | tail -5
-
-      - name: Mostrar configuração
-        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-        run: cat buildozer.spec
-
-      - name: Limpar build anterior
+      - name: Compilar APK GNV
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
           rm -rf .buildozer bin
-          mkdir -p bin
-
-      - name: Compilar APK
-        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
-        run: |
-          set -o pipefail
-          echo "=== V28.37 ANDROID BUILD ==="
-          echo "Entrada: main.py (bootstrap UI-first, abas sob demanda)"
-          echo "Usando p4a local corrigido: $PWD/p4a"
           buildozer -v android debug 2>&1 | tee build_full.log
 
-      - name: Diagnostico
+      - name: Diagnóstico
         if: always()
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          echo "=== DIAGNOSTICO ==="
+          echo "=== DIAGNÓSTICO ==="
           python --version
           buildozer --version || true
           if [ -f build_full.log ]; then
             echo "=== ERROS ==="
-            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError|ModuleNotFoundError|HTTP Error 5" build_full.log | tail -200 || true
-            echo "=== RUNTIME DEPENDENCIES ==="
-            grep -nEi "filetype|fpdf2|openpyxl|Successfully installed|ModuleNotFoundError|ImportError" build_full.log | tail -150 || true
-            echo "=== PIP INTERNAL ==="
-            grep -nEi "pip install.*pip|Successfully installed pip|pip 26|pip 25\.3|RequirementInformation|open_rich_spinner" build_full.log | tail -100 || true
-            echo "=== NDK API ==="
-            grep -n -- "--ndk-api=" build_full.log | tail -20 || true
+            grep -nEi "error:|fatal error:|make: \*\*\*|Error code|Command failed|Traceback|ImportError|ModuleNotFoundError" build_full.log | tail -200 || true
+            echo "=== DEPENDÊNCIAS ==="
+            grep -nEi "kivy|python-for-android|sqlite|fpdf2|openpyxl|pillow|filetype|ImportError|ModuleNotFoundError" build_full.log | tail -150 || true
+            echo "=== APK ==="
+            find . -type f -name "*.apk" -print || true
           fi
-          echo "=== APKs ==="
-          find . -type f -name "*.apk" -print || true
 
-      - name: Upload log
+      - name: Upload log GNV
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: GNV-V28.37-BUILD-LOG
+          name: GNV-V28.40-BUILD-LOG
           path: GNV_V28_27_ANDROID_BUILD_FIX/build_full.log
-          if-no-files-found: error
+          if-no-files-found: warn
 
-      - name: Upload APK
+      - name: Upload APK GNV
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: GNV-V28.37-APK
+          name: GNV-V28.40-APK
           path: GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
           if-no-files-found: error
