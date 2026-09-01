@@ -1,4 +1,4 @@
-# V28.43 - entrada Android resiliente
+# V28.44 - entrada Android resiliente
 #
 # O APK deve abrir a interface ANTES de executar qualquer operação pesada.
 # As abas são montadas uma por vez dentro do ciclo do Kivy. Se uma aba ou
@@ -7,6 +7,7 @@
 
 import importlib
 import traceback
+from pathlib import Path
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -22,7 +23,7 @@ class AndroidGNVApp(App):
     """Launcher Android independente e resiliente."""
 
     def build(self):
-        self.title = "Sistema de Cálculos e Análise da Capacidade do Cilindro de GNV - V28.43"
+        self.title = "Sistema de Cálculos e Análise da Capacidade do Cilindro de GNV - V28.44"
         self._boot_status = Label(
             text="Loading...\n\nInicializando o sistema GNV...",
             font_size=sp(18),
@@ -32,9 +33,6 @@ class AndroidGNVApp(App):
         self._boot_status.bind(size=lambda w, *_: setattr(w, "text_size", w.size))
         root = BoxLayout(padding=dp(24))
         root.add_widget(self._boot_status)
-
-        # O primeiro frame precisa ser entregue ao Android antes de importar,
-        # abrir SQLite ou construir as 12 telas.
         Clock.schedule_once(self._boot, 0.15)
         return root
 
@@ -50,19 +48,8 @@ class AndroidGNVApp(App):
             root = self.root
             root.clear_widgets()
             box = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(8))
-            box.add_widget(Label(
-                text=title,
-                font_size=sp(18),
-                bold=True,
-                size_hint_y=None,
-                height=dp(55),
-            ))
-            box.add_widget(Label(
-                text=details,
-                font_size=sp(10),
-                halign="left",
-                valign="top",
-            ))
+            box.add_widget(Label(text=title, font_size=sp(18), bold=True, size_hint_y=None, height=dp(55)))
+            box.add_widget(Label(text=details, font_size=sp(10), halign="left", valign="top"))
             root.add_widget(box)
         finally:
             print(details)
@@ -72,11 +59,7 @@ class AndroidGNVApp(App):
         try:
             screen.clear_widgets()
             screen.add_widget(Label(
-                text=(
-                    "ERRO AO CARREGAR ESTA ABA\n\n"
-                    f"{method_name}\n\n"
-                    f"{details}"
-                ),
+                text=f"ERRO AO CARREGAR ESTA ABA\n\n{method_name}\n\n{details}",
                 halign="left",
                 valign="top",
                 font_size=sp(10),
@@ -88,29 +71,27 @@ class AndroidGNVApp(App):
         try:
             self._status("Loading...\n\nCarregando bibliotecas do sistema...")
             module = importlib.import_module(APP_MODULE_NAME)
-
             base_cls = getattr(module, "MobileGNVApp")
+            if not issubclass(base_cls, App):
+                raise TypeError("MobileGNVApp não herda de kivy.app.App")
+
             self._base_cls = base_cls
             self._module = module
-
-            # Reaproveita os métodos/classes do aplicativo original, mas a
-            # instância que executa é ESTE App, que pertence ao Kivy desde o
-            # começo. Não alteramos __class__ e não chamamos App.build().
             self._prepare_model(module)
             self._prepare_ui(module)
-
             self._status("Loading...\n\nAbrindo a calculadora...")
             Clock.schedule_once(self._build_next_screen, 0.05)
-
         except BaseException as exc:
             self._show_fatal("O aplicativo encontrou um erro ao iniciar", exc)
 
     def _prepare_model(self, module):
-        # Atributos comuns usados pelos métodos do aplicativo original.
         self.instance = self
+        # Compatibilidade com qualquer método legado que consulte
+        # MobileGNVApp.instance diretamente.
+        module.MobileGNVApp.instance = self
         self.title = getattr(module, "APP_TITLE", self.title)
         self.idioma = "pt-BR"
-        self.base_dir = __import__("pathlib").Path(self.user_data_dir)
+        self.base_dir = Path(self.user_data_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = str(self.base_dir / "gnv_dados.db")
         self.config_path = self.base_dir / "configuracoes.json"
@@ -121,14 +102,14 @@ class AndroidGNVApp(App):
             self.banco.criar_tabela()
             self.banco.criar_indices()
         except BaseException as exc:
-            # SQLite nunca deve impedir o aplicativo de abrir.
             print("Aviso SQLite:", "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
             try:
                 self.banco = module.BancoGNV(":memory:")
                 self.banco.conectar()
                 self.banco.criar_tabela()
                 self.banco.criar_indices()
-            except BaseException:
+            except BaseException as nested:
+                print("SQLite indisponível:", nested)
                 self.banco = None
 
         self.formula_pt = self._safe_call("_load_formula_pt", "")
@@ -180,8 +161,6 @@ class AndroidGNVApp(App):
         )
         root.add_widget(self.header)
 
-        # Em vez dos controles completos de navegação logo no startup,
-        # usamos o spinner original somente depois que a primeira aba existir.
         nav = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(4))
         Spinner = getattr(module, "Spinner")
         self.tab_spinner = Spinner(
@@ -212,7 +191,6 @@ class AndroidGNVApp(App):
         self.footer.bind(size=lambda w, *_: setattr(w, "text_size", w.size))
         root.add_widget(self.footer)
 
-        # self.root existe neste ponto: o App já está rodando.
         self.root.clear_widgets()
         self.root.add_widget(root)
         self._ui_root = root
@@ -227,10 +205,12 @@ class AndroidGNVApp(App):
         index = self._tab_index
         self._status(f"Loading...\n\nCarregando: {title}")
         try:
-            method = getattr(self, method_name)
-            method()
+            getattr(self, method_name)()
         except BaseException as exc:
-            print(f"Falha na aba {index} - {title}:\n", "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+            print(
+                f"Falha na aba {index} - {title}:\n",
+                "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            )
             try:
                 screen = self.sm.get_screen(self.screen_names[index])
                 self._show_screen_error(screen, method_name, exc)
@@ -242,19 +222,9 @@ class AndroidGNVApp(App):
 
     def _finish_boot(self):
         self._status("Inicialização concluída.")
-        try:
-            self._safe_call("_load_config", None)
-            self._safe_call("_apply_language", None)
-            self._safe_call("_mark_visual_ready", None)
-        except BaseException as exc:
-            print("Aviso final de inicialização:", exc)
-        Clock.schedule_once(lambda *_: self._clear_boot_status(), 0.15)
-
-    def _clear_boot_status(self):
-        # A tela principal já substituiu o conteúdo do root. O método existe
-        # apenas para manter o callback seguro caso uma versão futura mantenha
-        # um indicador de inicialização separado.
-        pass
+        self._safe_call("_load_config", None)
+        self._safe_call("_apply_language", None)
+        self._safe_call("_mark_visual_ready", None)
 
 
 if __name__ == "__main__":
