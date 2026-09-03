@@ -117,159 +117,53 @@ jobs:
           name: GNV-APK-REAL
           path: apk
 
-      - name: Preparar Android SDK e Emulator
+      - name: Habilitar KVM
         run: |
-          set -e
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platform-tools" "emulator" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
-          rm -rf "$HOME/.android/avd/gnv-api35.avd" "$HOME/.android/avd/gnv-api35.ini"
-          echo "no" | avdmanager create avd -n gnv-api35 -k "system-images;android-35;google_apis;x86_64" --force
-          emulator -list-avds
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
 
-      - name: Iniciar Android Emulator
-        run: |
-          set -u
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-
-          : > emulator.log
-          adb kill-server || true
-          adb start-server
-
-          echo "=== ACCELERAÇÃO ==="
-          emulator -accel-check 2>&1 | tee accel-check.log || true
-
-          echo "=== INICIANDO EMULADOR ==="
-          nohup emulator -avd gnv-api35 \
-            -no-window \
-            -no-audio \
-            -no-boot-anim \
-            -no-snapshot \
-            -wipe-data \
-            -gpu swiftshader_indirect \
-            -accel auto \
-            > emulator.log 2>&1 &
-          EMU_PID=$!
-          echo "EMU_PID=$EMU_PID"
-
-          echo "=== ESPERANDO PROCESSO DO EMULADOR ==="
-          for i in $(seq 1 30); do
-            if ! kill -0 "$EMU_PID" 2>/dev/null; then
-              echo "ERRO: o processo do emulador encerrou antes de disponibilizar o ADB."
-              cat emulator.log || true
+      - name: Android Emulator com teste real
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            set -e
+            APK=$(find apk -type f -name '*.apk' | head -1)
+            test -n "$APK"
+            echo "APK=$APK"
+            adb devices -l
+            adb install -r "$APK"
+            adb logcat -c
+            echo "=== INICIANDO APLICATIVO ==="
+            adb shell monkey -p br.com.gaiochristiano.gnvcalculator 1
+            sleep 20
+            echo "=== VERIFICANDO PROCESSO ==="
+            pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
+            echo "PID=$pid"
+            adb shell dumpsys package br.com.gaiochristiano.gnvcalculator || true
+            if [ -z "$pid" ]; then
+              echo "APLICATIVO ENCERRADO DURANTE A INICIALIZAÇÃO"
+              adb logcat -d -v time | tee android_runtime.log
               exit 1
             fi
-            sleep 1
-          done
+            echo "APLICATIVO PERMANECEU EM EXECUÇÃO POR 20 SEGUNDOS"
+            adb logcat -d -v time > android_runtime.log
 
-          echo "=== ESPERANDO ADB ==="
-          DEVICE=""
-          for i in $(seq 1 120); do
-            DEVICE=$(adb devices | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {print $1; exit}')
-            if [ -n "$DEVICE" ]; then
-              echo "Dispositivo detectado: $DEVICE"
-              break
-            fi
-            if ! kill -0 "$EMU_PID" 2>/dev/null; then
-              echo "ERRO: o emulador encerrou enquanto aguardava o ADB."
-              cat emulator.log || true
-              exit 1
-            fi
-            sleep 2
-          done
-
-          if [ -z "$DEVICE" ]; then
-            echo "ERRO: o emulador não apareceu no ADB após 4 minutos."
-            echo "=== ADB DEVICES ==="
-            adb devices -l || true
-            echo "=== PROCESSO ==="
-            ps -ef | grep -E '[e]mulator.*gnv-api35' || true
-            echo "=== EMULATOR LOG ==="
-            cat emulator.log || true
-            exit 1
-          fi
-
-          echo "=== ESPERANDO BOOT COMPLETO ==="
-          BOOT_OK=0
-          for i in $(seq 1 120); do
-            boot=$(adb -s "$DEVICE" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
-            echo "boot=$boot tentativa=$i"
-            if [ "$boot" = "1" ]; then
-              BOOT_OK=1
-              break
-            fi
-            sleep 2
-          done
-
-          if [ "$BOOT_OK" != "1" ]; then
-            echo "ERRO: o Android foi detectado pelo ADB, mas não terminou o boot."
-            echo "=== ADB DEVICES ==="
-            adb devices -l || true
-            echo "=== BOOT PROPERTIES ==="
-            adb -s "$DEVICE" shell getprop | grep -E 'sys.boot_completed|dev.bootcomplete|ro.boot|init.svc.bootanim' || true
-            echo "=== LOGCAT ==="
-            adb -s "$DEVICE" logcat -d -v time || true
-            echo "=== EMULATOR LOG ==="
-            tail -500 emulator.log || true
-            exit 1
-          fi
-
-          adb -s "$DEVICE" shell settings put global window_animation_scale 0
-          adb -s "$DEVICE" shell settings put global transition_animation_scale 0
-          adb -s "$DEVICE" shell settings put global animator_duration_scale 0
-          echo "ANDROID_EMULATOR_DEVICE=$DEVICE" >> "$GITHUB_ENV"
-
-      - name: Instalar e iniciar aplicativo
-        run: |
-          set -e
-          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          DEVICE="${ANDROID_EMULATOR_DEVICE:-$(adb devices | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {print $1; exit}')}"
-          APK=$(find apk -type f -name '*.apk' | head -1)
-          test -n "$APK"
-          test -n "$DEVICE"
-          echo "APK=$APK"
-          echo "DEVICE=$DEVICE"
-          adb -s "$DEVICE" install -r "$APK"
-          adb -s "$DEVICE" logcat -c
-          adb -s "$DEVICE" shell monkey -p br.com.gaiochristiano.gnvcalculator 1
-          sleep 20
-          pid=$(adb -s "$DEVICE" shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
-          echo "PID=$pid"
-          if [ -z "$pid" ]; then
-            echo "APLICATIVO ENCERRADO DURANTE A INICIALIZAÇÃO"
-            adb -s "$DEVICE" logcat -d -v time || true
-            exit 1
-          fi
-          echo "APLICATIVO PERMANECEU EM EXECUÇÃO POR 20 SEGUNDOS"
-
-      - name: Diagnóstico Android
-        if: always()
-        run: |
-          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          DEVICE="${ANDROID_EMULATOR_DEVICE:-$(adb devices | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {print $1; exit}')}"
-          adb devices -l > adb_devices.txt 2>&1 || true
-          adb logcat -d -v time > android_runtime.log 2>&1 || true
-          if [ -n "$DEVICE" ]; then
-            adb -s "$DEVICE" shell dumpsys package br.com.gaiochristiano.gnvcalculator > package_dump.txt 2>&1 || true
-            adb -s "$DEVICE" shell dumpsys activity processes > activity_processes.txt 2>&1 || true
-          else
-            : > package_dump.txt
-            : > activity_processes.txt
-          fi
-          cp accel-check.log accel_check_saved.log 2>/dev/null || true
-
-      - name: Upload diagnóstico Android
+      - name: Publicar diagnóstico Android
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: GNV-ANDROID-RUNTIME-DIAGNOSTIC
           path: |
             android_runtime.log
-            package_dump.txt
-            activity_processes.txt
-            emulator.log
-            accel-check.log
-            adb_devices.txt
+            apk/*.apk
           if-no-files-found: warn
