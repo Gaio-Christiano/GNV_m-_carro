@@ -65,19 +65,31 @@ jobs:
           if old in text:
               build_py.write_text(text.replace(old, new), encoding="utf-8")
 
+          # O SourceForge termina o redirecionamento em "/download".
+          # O python-for-android precisa receber uma URL cujo nome termine
+          # em .tar.gz para identificar o formato automaticamente.
           freetype = Path("p4a/pythonforandroid/recipes/freetype/__init__.py")
           text = freetype.read_text(encoding="utf-8")
           old_url = "https://download.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz"
-          new_url = "https://sourceforge.net/projects/freetype/files/freetype2/{version}/freetype-{version}.tar.gz/download"
+          new_url = "https://github.com/freetype/freetype/releases/download/VER-2-14-1/freetype-{version}.tar.gz"
           if old_url not in text:
-              raise SystemExit("URL esperada do FreeType não encontrada; interrompendo para não mascarar alteração inesperada no p4a")
+              raise SystemExit("URL original do FreeType não encontrada; interrompendo para não mascarar alteração inesperada no p4a")
           freetype.write_text(text.replace(old_url, new_url), encoding="utf-8")
           PY
+
           echo "=== P4A ==="
           git -C p4a rev-parse HEAD
           git -C p4a describe --tags --exact-match HEAD || true
           echo "=== FREETYPE URL ==="
-          grep -n "sourceforge.net.*freetype" p4a/pythonforandroid/recipes/freetype/__init__.py
+          grep -n "github.com/freetype/freetype/releases/download" p4a/pythonforandroid/recipes/freetype/__init__.py
+
+          # Teste explícito do artefato antes de iniciar a compilação Android.
+          # Se o download não for realmente um tar.gz, falha aqui com diagnóstico claro.
+          FREETYPE_URL="https://github.com/freetype/freetype/releases/download/VER-2-14-1/freetype-2.14.1.tar.gz"
+          curl -fL --retry 3 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
+          test -s /tmp/freetype-2.14.1.tar.gz
+          tar -tzf /tmp/freetype-2.14.1.tar.gz >/dev/null
+          echo "FreeType 2.14.1: download e validação OK"
 
       - name: Compilar APK GNV
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
