@@ -65,13 +65,13 @@ jobs:
           if old in text:
               build_py.write_text(text.replace(old, new), encoding="utf-8")
 
-          # O SourceForge termina o redirecionamento em "/download".
-          # O python-for-android precisa receber uma URL cujo nome termine
-          # em .tar.gz para identificar o formato automaticamente.
+          # A URL de release no GitHub não existe como asset freetype-2.14.1.tar.gz.
+          # Usamos o arquivo de origem da tag oficial, que é servido pelo GitHub
+          # como tar.gz e contém o código correspondente à versão 2.14.1.
           freetype = Path("p4a/pythonforandroid/recipes/freetype/__init__.py")
           text = freetype.read_text(encoding="utf-8")
           old_url = "https://download.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz"
-          new_url = "https://github.com/freetype/freetype/releases/download/VER-2-14-1/freetype-{version}.tar.gz"
+          new_url = "https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz"
           if old_url not in text:
               raise SystemExit("URL original do FreeType não encontrada; interrompendo para não mascarar alteração inesperada no p4a")
           freetype.write_text(text.replace(old_url, new_url), encoding="utf-8")
@@ -81,11 +81,10 @@ jobs:
           git -C p4a rev-parse HEAD
           git -C p4a describe --tags --exact-match HEAD || true
           echo "=== FREETYPE URL ==="
-          grep -n "github.com/freetype/freetype/releases/download" p4a/pythonforandroid/recipes/freetype/__init__.py
+          grep -n "freetype/freetype/archive/refs/tags" p4a/pythonforandroid/recipes/freetype/__init__.py
 
-          # Teste explícito do artefato antes de iniciar a compilação Android.
-          # Se o download não for realmente um tar.gz, falha aqui com diagnóstico claro.
-          FREETYPE_URL="https://github.com/freetype/freetype/releases/download/VER-2-14-1/freetype-2.14.1.tar.gz"
+          # Validação independente do mesmo arquivo que será usado pelo p4a.
+          FREETYPE_URL="https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz"
           curl -fL --retry 3 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
           test -s /tmp/freetype-2.14.1.tar.gz
           tar -tzf /tmp/freetype-2.14.1.tar.gz >/dev/null
