@@ -43,29 +43,46 @@ jobs:
       - name: Verificar arquivos e sintaxe
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
+          set -euo pipefail
           test -f main.py
           test -f GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           test -f buildozer.spec
           python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
 
-      - name: Preparar python-for-android
+      - name: Preparar python-for-android fixado
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
+          set -euo pipefail
           rm -rf p4a
-          git clone --depth 1 --branch master https://github.com/kivy/python-for-android.git p4a
+          git clone --depth 1 --branch v2026.05.09 https://github.com/kivy/python-for-android.git p4a
           python - <<'PY'
           from pathlib import Path
-          p = Path("p4a/pythonforandroid/build.py")
-          s = p.read_text(encoding="utf-8")
+
+          build_py = Path("p4a/pythonforandroid/build.py")
+          text = build_py.read_text(encoding="utf-8")
           old = "pip install -U pip"
           new = "python -m pip --version"
-          if old in s:
-              p.write_text(s.replace(old, new), encoding="utf-8")
+          if old in text:
+              build_py.write_text(text.replace(old, new), encoding="utf-8")
+
+          freetype = Path("p4a/pythonforandroid/recipes/freetype/__init__.py")
+          text = freetype.read_text(encoding="utf-8")
+          old_url = "https://download.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz"
+          new_url = "https://sourceforge.net/projects/freetype/files/freetype2/{version}/freetype-{version}.tar.gz/download"
+          if old_url not in text:
+              raise SystemExit("URL esperada do FreeType não encontrada; interrompendo para não mascarar alteração inesperada no p4a")
+          freetype.write_text(text.replace(old_url, new_url), encoding="utf-8")
           PY
+          echo "=== P4A ==="
+          git -C p4a rev-parse HEAD
+          git -C p4a describe --tags --exact-match HEAD || true
+          echo "=== FREETYPE URL ==="
+          grep -n "sourceforge.net.*freetype" p4a/pythonforandroid/recipes/freetype/__init__.py
 
       - name: Compilar APK GNV
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
+          set -o pipefail
           rm -rf .buildozer bin
           buildozer -v android debug 2>&1 | tee build_full.log
 
@@ -80,7 +97,7 @@ jobs:
           find bin -type f -name '*.apk' -print || true
           echo "=== ERROS ==="
           if [ -f build_full.log ]; then
-            grep -nEi "error:|fatal error:|Command failed|Traceback|ImportError|ModuleNotFoundError|SSL|certificate" build_full.log | tail -200 || true
+            grep -nEi "error:|fatal error:|Command failed|Traceback|ImportError|ModuleNotFoundError|HTTP Error|SSL|certificate|FreeType|freetype" build_full.log | tail -300 || true
           fi
 
       - name: Upload log GNV
