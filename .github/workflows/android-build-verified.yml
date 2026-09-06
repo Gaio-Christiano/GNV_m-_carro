@@ -7,47 +7,88 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Python 3.12.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.9"
+          cache: pip
+
+      - name: Dependencias Linux
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential git zip unzip autoconf automake autopoint libtool pkg-config cmake gettext libffi-dev libssl-dev libltdl-dev zlib1g-dev libncurses5-dev libncursesw5-dev
+          python -m pip install --upgrade "pip<26.2" setuptools wheel
+          python -m pip install buildozer==1.5.0 "Cython==0.29.34"
+
       - name: Preparar projeto Android
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         shell: bash
         run: |
           set -euxo pipefail
-          PROJECT_DIR="$(dirname "$(find . -name buildozer.spec -print -quit)")"
-          test -n "$PROJECT_DIR"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          cd "$PROJECT_DIR"
-          echo '--- buildozer.spec original ---'
-          grep -E '^(requirements|android\.archs|android\.api|android\.minapi|p4a\.)' buildozer.spec || true
-          echo '--- verificando Pillow ---'
-          if grep -R -nE '(^|[[:space:]])(from|import)[[:space:]]+PIL' --include='*.py' .; then
-            echo 'Pillow e realmente usado pelo codigo; nao sera removido.'
-          else
-            echo 'Pillow nao e importado pelo codigo; removendo dependencia para eliminar FreeType.'
-            sed -i -E 's/,?pillow,?//g; s/,,/,/g; s/requirements = /requirements = /' buildozer.spec
-          fi
-          # Nao usar o p4a local/patchado desta tentativa; usar a versao integrada pelo Buildozer.
-          sed -i '/^[[:space:]]*p4a\.source_dir[[:space:]]*=/d' buildozer.spec
-          # Primeiro build com ABIs de celular + emulator para permitir teste real de inicializacao.
-          sed -i -E 's/^android\.archs[[:space:]]*=.*/android.archs = arm64-v8a,x86_64/' buildozer.spec
-          echo '--- buildozer.spec final ---'
-          grep -E '^(requirements|android\.archs|android\.api|android\.minapi|p4a\.)' buildozer.spec || true
+          test -f main.py
+          test -f GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
+          test -f buildozer.spec
+          python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
 
-      - name: Instalar dependencias
+          # Pillow nao e importado pelo aplicativo; remover a dependencia evita
+          # a receita Pillow/FreeType desnecessaria.
+          if ! grep -R -nE '(^|[[:space:]])(from|import)[[:space:]]+PIL' --include='*.py' .; then
+            sed -i -E 's/,?pillow,?//g; s/,,/,/g' buildozer.spec
+          fi
+
+          # Usar uma revisao conhecida do python-for-android em vez de buscar
+          # uma referencia movel durante o build.
+          rm -rf p4a
+          git init p4a
+          git -C p4a remote add origin https://github.com/kivy/python-for-android.git
+          git -C p4a fetch --depth 1 origin 58d21141f17c889bf8585f5665921d72028f8831
+          git -C p4a checkout --detach FETCH_HEAD
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('p4a/pythonforandroid/recipes/freetype/__init__.py')
+          text = p.read_text(encoding='utf-8')
+          old = 'https://download.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz'
+          new = 'https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz'
+          if old not in text:
+              raise SystemExit('Receita FreeType inesperada: URL original nao encontrada')
+          p.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+          sed -i '/^[[:space:]]*android\.archs[[:space:]]*=/c\android.archs = arm64-v8a,x86_64' buildozer.spec
+          grep -E '^(requirements|android\.archs|android\.api|android\.minapi|p4a\.)' buildozer.spec
+          git -C p4a rev-parse HEAD
+          test "$(git -C p4a rev-parse HEAD)" = "58d21141f17c889bf8585f5665921d72028f8831"
+
+          curl -fL --retry 3 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz 'https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz'
+          test -s /tmp/freetype-2.14.1.tar.gz
+          tar -tzf /tmp/freetype-2.14.1.tar.gz >/dev/null
+
+      - name: Limpar caches de builds anteriores
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install buildozer==1.5.0 cython==0.29.37
+          rm -rf .buildozer bin
 
       - name: Build APK
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          set -euxo pipefail
-          buildozer -v android debug
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee build_full.log
           find bin -maxdepth 1 -type f -name '*.apk' -print
+          test -n "$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
 
       - name: Guardar APK e logs
         if: always()
@@ -55,8 +96,9 @@ jobs:
         with:
           name: GNV-ANDROID-VERIFIED
           path: |
-            ${{ env.PROJECT_DIR }}/bin/*.apk
-            ${{ env.PROJECT_DIR }}/.buildozer/android/platform/build-*/dists/*/build.log
+            GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
+            GNV_V28_27_ANDROID_BUILD_FIX/build_full.log
+            GNV_V28_27_ANDROID_BUILD_FIX/.buildozer/android/platform/build-*/dists/*/build.log
           if-no-files-found: warn
           retention-days: 7
 
@@ -67,14 +109,25 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          force-avd-creation: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
           script: |
             set -euxo pipefail
-            APK="$(find '${{ env.PROJECT_DIR }}/bin' -maxdepth 1 -name '*x86_64*.apk' -o -name '*.apk' | head -n 1)"
+            APK="$(find '${{ github.workspace }}/GNV_V28_27_ANDROID_BUILD_FIX/bin' -maxdepth 1 -type f -name '*x86_64*.apk' -print -quit)"
+            if [ -z "$APK" ]; then
+              APK="$(find '${{ github.workspace }}/GNV_V28_27_ANDROID_BUILD_FIX/bin' -maxdepth 1 -type f -name '*.apk' -print -quit)"
+            fi
             test -f "$APK"
             adb install -r "$APK"
             adb shell am force-stop br.com.gaiochristiano.gnvcalculator || true
+            adb logcat -c
             adb shell monkey -p br.com.gaiochristiano.gnvcalculator 1
-            sleep 8
-            adb shell pidof br.com.gaiochristiano.gnvcalculator
-            adb shell dumpsys activity activities | grep -E 'mResumedActivity|br.com.gaiochristiano.gnvcalculator' || true
-            adb logcat -d -t 500 | grep -E 'AndroidRuntime|FATAL EXCEPTION|gnvcalculator|python' || true
+            sleep 5
+            pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
+            test -n "$pid"
+            sleep 20
+            pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
+            test -n "$pid"
+            adb logcat -d -t 800 | grep -E 'AndroidRuntime|FATAL EXCEPTION|gnvcalculator|python' || true
