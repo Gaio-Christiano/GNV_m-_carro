@@ -1,0 +1,80 @@
+name: Android Build Verified
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar projeto Android
+        shell: bash
+        run: |
+          set -euxo pipefail
+          PROJECT_DIR="$(dirname "$(find . -name buildozer.spec -print -quit)")"
+          test -n "$PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          cd "$PROJECT_DIR"
+          echo '--- buildozer.spec original ---'
+          grep -E '^(requirements|android\.archs|android\.api|android\.minapi|p4a\.)' buildozer.spec || true
+          echo '--- verificando Pillow ---'
+          if grep -R -nE '(^|[[:space:]])(from|import)[[:space:]]+PIL' --include='*.py' .; then
+            echo 'Pillow e realmente usado pelo codigo; nao sera removido.'
+          else
+            echo 'Pillow nao e importado pelo codigo; removendo dependencia para eliminar FreeType.'
+            sed -i -E 's/,?pillow,?//g; s/,,/,/g; s/requirements = /requirements = /' buildozer.spec
+          fi
+          # Nao usar o p4a local/patchado desta tentativa; usar a versao integrada pelo Buildozer.
+          sed -i '/^[[:space:]]*p4a\.source_dir[[:space:]]*=/d' buildozer.spec
+          # Primeiro build com ABIs de celular + emulator para permitir teste real de inicializacao.
+          sed -i -E 's/^android\.archs[[:space:]]*=.*/android.archs = arm64-v8a,x86_64/' buildozer.spec
+          echo '--- buildozer.spec final ---'
+          grep -E '^(requirements|android\.archs|android\.api|android\.minapi|p4a\.)' buildozer.spec || true
+
+      - name: Instalar dependencias
+        run: |
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install buildozer==1.5.0 cython==0.29.37
+
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -euxo pipefail
+          buildozer -v android debug
+          find bin -maxdepth 1 -type f -name '*.apk' -print
+
+      - name: Guardar APK e logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GNV-ANDROID-VERIFIED
+          path: |
+            ${{ env.PROJECT_DIR }}/bin/*.apk
+            ${{ env.PROJECT_DIR }}/.buildozer/android/platform/build-*/dists/*/build.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Testar inicializacao no Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            set -euxo pipefail
+            APK="$(find '${{ env.PROJECT_DIR }}/bin' -maxdepth 1 -name '*x86_64*.apk' -o -name '*.apk' | head -n 1)"
+            test -f "$APK"
+            adb install -r "$APK"
+            adb shell am force-stop br.com.gaiochristiano.gnvcalculator || true
+            adb shell monkey -p br.com.gaiochristiano.gnvcalculator 1
+            sleep 8
+            adb shell pidof br.com.gaiochristiano.gnvcalculator
+            adb shell dumpsys activity activities | grep -E 'mResumedActivity|br.com.gaiochristiano.gnvcalculator' || true
+            adb logcat -d -t 500 | grep -E 'AndroidRuntime|FATAL EXCEPTION|gnvcalculator|python' || true
