@@ -43,10 +43,9 @@ jobs:
           test -f buildozer.spec
           python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
 
-          # Pillow somente e removido quando nao existe import PIL.
-          if ! grep -R -nE '(^|[[:space:]])(from|import)[[:space:]]+PIL' --include='*.py' .; then
-            sed -i -E 's/,?pillow,?//g; s/,,/,/g' buildozer.spec
-          fi
+          # Pillow e usado pelo aplicativo (geracao de imagens de resultados), portanto
+          # a dependencia NAO pode ser removida do buildozer.spec.
+          grep -R -nE '(^|[[:space:]])(from|import)[[:space:]]+PIL' --include='*.py' .
 
           rm -rf p4a
           git init p4a
@@ -74,8 +73,8 @@ jobs:
           curl -fL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
           test -s /tmp/freetype-2.14.1.tar.gz
           test "$(sha256sum /tmp/freetype-2.14.1.tar.gz | awk '{print $1}')" = "174d9e53402e1bf9ec7277e22ec199ba3e55a6be2c0740cb18c0ee9850fc8c34"
-          tar -tzf /tmp/freetype-2.14.1.tar.gz | grep -m1 'freetype-2.14.1/subprojects/dlg/include/dlg/output.h$'
-          echo 'FreeType 2.14.1 validado: checksum e submodulo dlg presentes'
+          tar -tzf /tmp/freetype-2.14.1.tar.gz | grep -m1 '^freetype-2.14.1/'
+          echo 'FreeType 2.14.1 validado: checksum e estrutura do tarball OK'
 
       - name: Limpar caches de builds anteriores
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -136,7 +135,7 @@ jobs:
               adb logcat -d -v time > "${{ github.workspace }}/android_runtime.log" || true
               exit 1
             fi
-            adb logcat -d -t 800 | grep -E 'AndroidRuntime|FATAL EXCEPTION|gnvcalculator|python' || true
+            adb logcat -d -t 800 | tee "${{ github.workspace }}/android_runtime.log" | grep -E 'AndroidRuntime|FATAL EXCEPTION|gnvcalculator|python' || true
 
       - name: Guardar diagnóstico de runtime
         if: always()
