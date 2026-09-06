@@ -43,14 +43,11 @@ jobs:
           test -f buildozer.spec
           python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
 
-          # Pillow nao e importado pelo aplicativo; remover a dependencia evita
-          # a receita Pillow/FreeType desnecessaria.
+          # Pillow somente e removido quando nao existe import PIL.
           if ! grep -R -nE '(^|[[:space:]])(from|import)[[:space:]]+PIL' --include='*.py' .; then
             sed -i -E 's/,?pillow,?//g; s/,,/,/g' buildozer.spec
           fi
 
-          # Usar uma revisao conhecida do python-for-android em vez de buscar
-          # uma referencia movel durante o build.
           rm -rf p4a
           git init p4a
           git -C p4a remote add origin https://github.com/kivy/python-for-android.git
@@ -62,7 +59,7 @@ jobs:
           p = Path('p4a/pythonforandroid/recipes/freetype/__init__.py')
           text = p.read_text(encoding='utf-8')
           old = 'https://download.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz'
-          new = 'https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz'
+          new = 'https://download-mirror.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz'
           if old not in text:
               raise SystemExit('Receita FreeType inesperada: URL original nao encontrada')
           p.write_text(text.replace(old, new), encoding='utf-8')
@@ -73,9 +70,12 @@ jobs:
           git -C p4a rev-parse HEAD
           test "$(git -C p4a rev-parse HEAD)" = "58d21141f17c889bf8585f5665921d72028f8831"
 
-          curl -fL --retry 3 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz 'https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz'
+          FREETYPE_URL='https://download-mirror.savannah.gnu.org/releases/freetype/freetype-2.14.1.tar.gz'
+          curl -fL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
           test -s /tmp/freetype-2.14.1.tar.gz
-          tar -tzf /tmp/freetype-2.14.1.tar.gz >/dev/null
+          test "$(sha256sum /tmp/freetype-2.14.1.tar.gz | awk '{print $1}')" = "174d9e53402e1bf9ec7277e22ec199ba3e55a6be2c0740cb18c0ee9850fc8c34"
+          tar -tzf /tmp/freetype-2.14.1.tar.gz | grep -m1 'freetype-2.14.1/subprojects/dlg/include/dlg/output.h$'
+          echo 'FreeType 2.14.1 validado: checksum e submodulo dlg presentes'
 
       - name: Limpar caches de builds anteriores
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -126,8 +126,22 @@ jobs:
             adb shell monkey -p br.com.gaiochristiano.gnvcalculator 1
             sleep 5
             pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
-            test -n "$pid"
+            if [ -z "$pid" ]; then
+              adb logcat -d -v time > "${{ github.workspace }}/android_runtime.log" || true
+              exit 1
+            fi
             sleep 20
             pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
-            test -n "$pid"
+            if [ -z "$pid" ]; then
+              adb logcat -d -v time > "${{ github.workspace }}/android_runtime.log" || true
+              exit 1
+            fi
             adb logcat -d -t 800 | grep -E 'AndroidRuntime|FATAL EXCEPTION|gnvcalculator|python' || true
+
+      - name: Guardar diagnóstico de runtime
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GNV-ANDROID-RUNTIME
+          path: android_runtime.log
+          if-no-files-found: warn
