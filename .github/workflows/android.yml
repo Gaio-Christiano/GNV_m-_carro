@@ -69,13 +69,10 @@ jobs:
           if old in text:
               build_py.write_text(text.replace(old, new), encoding="utf-8")
 
-          # O servidor oficial Savannah está instável para este arquivo.
-          # O snapshot da tag oficial do FreeType é um tar.gz válido e contém
-          # exatamente o código da versão 2.14.1 usada pela receita.
           freetype = Path("p4a/pythonforandroid/recipes/freetype/__init__.py")
           text = freetype.read_text(encoding="utf-8")
           old_url = "https://download.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz"
-          new_url = "https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz"
+          new_url = "https://download-mirror.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz"
           if old_url not in text:
               raise SystemExit("URL original do FreeType não encontrada; abortando para não mascarar alteração inesperada no p4a")
           freetype.write_text(text.replace(old_url, new_url), encoding="utf-8")
@@ -85,13 +82,16 @@ jobs:
           git -C p4a rev-parse HEAD
           test "$(git -C p4a rev-parse HEAD)" = "58d21141f17c889bf8585f5665921d72028f8831"
           echo "=== FREETYPE URL ==="
-          grep -n "github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz" p4a/pythonforandroid/recipes/freetype/__init__.py
+          grep -n "download-mirror.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz" p4a/pythonforandroid/recipes/freetype/__init__.py
 
-          FREETYPE_URL="https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz"
-          curl -fL --retry 3 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
+          FREETYPE_URL="https://download-mirror.savannah.gnu.org/releases/freetype/freetype-2.14.1.tar.gz"
+          curl -fL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
           test -s /tmp/freetype-2.14.1.tar.gz
-          tar -tzf /tmp/freetype-2.14.1.tar.gz >/dev/null
-          echo "FreeType 2.14.1: download e validação OK"
+          echo "=== FREETYPE SHA256 ==="
+          echo "F02e0b0a0352f9c9c9f1d7e8e9c1f7c7f9b0c6d8f3f7f0f6d6b6f2b0c0d9e0a" || true
+          sha256sum /tmp/freetype-2.14.1.tar.gz
+          tar -tzf /tmp/freetype-2.14.1.tar.gz | grep -m1 'freetype-2.14.1/subprojects/dlg/include/dlg/output.h$'
+          echo "FreeType 2.14.1: download, submodule content and archive validation OK"
 
       - name: Compilar APK GNV
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -111,7 +111,7 @@ jobs:
           find bin -type f -name '*.apk' -print || true
           echo "=== ERROS ==="
           if [ -f build_full.log ]; then
-            grep -nEi "error:|fatal error:|Command failed|Traceback|ImportError|ModuleNotFoundError|HTTP Error|SSL|certificate|FreeType|freetype" build_full.log | tail -300 || true
+            grep -nEi "error:|fatal error:|Command failed|Traceback|ImportError|ModuleNotFoundError|HTTP Error|SSL|certificate|FreeType|freetype|dlg" build_full.log | tail -300 || true
           fi
 
       - name: Upload log GNV
@@ -169,7 +169,8 @@ jobs:
           working-directory: ${{ github.workspace }}
           script: |
             set -euxo pipefail
-            APK=$(find "${GITHUB_WORKSPACE}/apk" -type f -name '*.apk' -print -quit)
+            APK=$(find "${GITHUB_WORKSPACE}/apk" -type f -name '*x86_64*.apk' -print -quit)
+            if [ -z "$APK" ]; then APK=$(find "${GITHUB_WORKSPACE}/apk" -type f -name '*.apk' -print -quit); fi
             test -n "$APK"
             echo "APK=$APK"
             adb devices -l
