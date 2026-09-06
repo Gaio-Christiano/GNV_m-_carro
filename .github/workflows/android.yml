@@ -88,10 +88,10 @@ jobs:
           curl -fL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
           test -s /tmp/freetype-2.14.1.tar.gz
           echo "=== FREETYPE SHA256 ==="
-          echo "F02e0b0a0352f9c9c9f1d7e8e9c1f7c7f9b0c6d8f3f7f0f6d6b6f2b0c0d9e0a" || true
           sha256sum /tmp/freetype-2.14.1.tar.gz
+          test "$(sha256sum /tmp/freetype-2.14.1.tar.gz | awk '{print $1}')" = "174d9e53402e1bf9ec7277e22ec199ba3e55a6be2c0740cb18c0ee9850fc8c34"
           tar -tzf /tmp/freetype-2.14.1.tar.gz | grep -m1 'freetype-2.14.1/subprojects/dlg/include/dlg/output.h$'
-          echo "FreeType 2.14.1: download, submodule content and archive validation OK"
+          echo "FreeType 2.14.1: download, checksum, submodule content and archive validation OK"
 
       - name: Compilar APK GNV
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
