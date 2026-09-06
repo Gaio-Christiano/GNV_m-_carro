@@ -54,7 +54,11 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf p4a
-          git clone --depth 1 --branch v2026.05.09 https://github.com/kivy/python-for-android.git p4a
+          git init p4a
+          git -C p4a remote add origin https://github.com/kivy/python-for-android.git
+          git -C p4a fetch --depth 1 origin 58d21141f17c889bf8585f5665921d72028f8831
+          git -C p4a checkout --detach FETCH_HEAD
+
           python - <<'PY'
           from pathlib import Path
 
@@ -65,25 +69,24 @@ jobs:
           if old in text:
               build_py.write_text(text.replace(old, new), encoding="utf-8")
 
-          # A URL de release no GitHub não existe como asset freetype-2.14.1.tar.gz.
-          # Usamos o arquivo de origem da tag oficial, que é servido pelo GitHub
-          # como tar.gz e contém o código correspondente à versão 2.14.1.
+          # O servidor oficial Savannah está instável para este arquivo.
+          # O snapshot da tag oficial do FreeType é um tar.gz válido e contém
+          # exatamente o código da versão 2.14.1 usada pela receita.
           freetype = Path("p4a/pythonforandroid/recipes/freetype/__init__.py")
           text = freetype.read_text(encoding="utf-8")
           old_url = "https://download.savannah.gnu.org/releases/freetype/freetype-{version}.tar.gz"
           new_url = "https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz"
           if old_url not in text:
-              raise SystemExit("URL original do FreeType não encontrada; interrompendo para não mascarar alteração inesperada no p4a")
+              raise SystemExit("URL original do FreeType não encontrada; abortando para não mascarar alteração inesperada no p4a")
           freetype.write_text(text.replace(old_url, new_url), encoding="utf-8")
           PY
 
           echo "=== P4A ==="
           git -C p4a rev-parse HEAD
-          git -C p4a describe --tags --exact-match HEAD || true
+          test "$(git -C p4a rev-parse HEAD)" = "58d21141f17c889bf8585f5665921d72028f8831"
           echo "=== FREETYPE URL ==="
-          grep -n "freetype/freetype/archive/refs/tags" p4a/pythonforandroid/recipes/freetype/__init__.py
+          grep -n "github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz" p4a/pythonforandroid/recipes/freetype/__init__.py
 
-          # Validação independente do mesmo arquivo que será usado pelo p4a.
           FREETYPE_URL="https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz"
           curl -fL --retry 3 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
           test -s /tmp/freetype-2.14.1.tar.gz
