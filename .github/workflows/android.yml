@@ -168,7 +168,7 @@ jobs:
           disable-animations: true
           working-directory: ${{ github.workspace }}
           script: |
-            set -euxo pipefail
+            set -eu
             APK=$(find "${GITHUB_WORKSPACE}/apk" -type f -name '*x86_64*.apk' -print -quit)
             if [ -z "$APK" ]; then APK=$(find "${GITHUB_WORKSPACE}/apk" -type f -name '*.apk' -print -quit); fi
             test -n "$APK"
