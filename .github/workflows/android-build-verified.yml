@@ -113,7 +113,7 @@ jobs:
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            set -euxo pipefail
+            set -eu
             APK="$(find '${{ github.workspace }}/GNV_V28_27_ANDROID_BUILD_FIX/bin' -maxdepth 1 -type f -name '*x86_64*.apk' -print -quit)"
             if [ -z "$APK" ]; then
               APK="$(find '${{ github.workspace }}/GNV_V28_27_ANDROID_BUILD_FIX/bin' -maxdepth 1 -type f -name '*.apk' -print -quit)"
