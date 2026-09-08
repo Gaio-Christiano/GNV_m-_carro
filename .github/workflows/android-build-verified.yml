@@ -2,8 +2,6 @@ name: Android Build Verified
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
   build-and-test:
@@ -11,16 +9,16 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Python 3.12.9
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12.9"
           cache: pip
@@ -73,8 +71,9 @@ jobs:
           curl -fL --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/freetype-2.14.1.tar.gz "$FREETYPE_URL"
           test -s /tmp/freetype-2.14.1.tar.gz
           test "$(sha256sum /tmp/freetype-2.14.1.tar.gz | awk '{print $1}')" = "174d9e53402e1bf9ec7277e22ec199ba3e55a6be2c0740cb18c0ee9850fc8c34"
-          tar -tzf /tmp/freetype-2.14.1.tar.gz | grep -m1 '^freetype-2.14.1/'
-          echo 'FreeType 2.14.1 validado: checksum e estrutura do tarball OK'
+          gzip -t /tmp/freetype-2.14.1.tar.gz
+          tar -tzf /tmp/freetype-2.14.1.tar.gz >/dev/null
+          echo 'FreeType 2.14.1 validado: checksum, gzip e estrutura do tarball OK'
 
       - name: Limpar caches de builds anteriores
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
@@ -112,35 +111,17 @@ jobs:
           emulator-boot-timeout: 600
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
+          working-directory: ${{ github.workspace }}
           script: |
-            set -eu
-            APK="$(find '${{ github.workspace }}/GNV_V28_27_ANDROID_BUILD_FIX/bin' -maxdepth 1 -type f -name '*x86_64*.apk' -print -quit)"
-            if [ -z "$APK" ]; then
-              APK="$(find '${{ github.workspace }}/GNV_V28_27_ANDROID_BUILD_FIX/bin' -maxdepth 1 -type f -name '*.apk' -print -quit)"
-            fi
-            test -f "$APK"
-            adb install -r "$APK"
-            adb shell am force-stop br.com.gaiochristiano.gnvcalculator || true
-            adb logcat -c
-            adb shell monkey -p br.com.gaiochristiano.gnvcalculator 1
-            sleep 5
-            pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
-            if [ -z "$pid" ]; then
-              adb logcat -d -v time > "${{ github.workspace }}/android_runtime.log" || true
-              exit 1
-            fi
-            sleep 20
-            pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
-            if [ -z "$pid" ]; then
-              adb logcat -d -v time > "${{ github.workspace }}/android_runtime.log" || true
-              exit 1
-            fi
-            adb logcat -d -t 800 | tee "${{ github.workspace }}/android_runtime.log" | grep -E 'AndroidRuntime|FATAL EXCEPTION|gnvcalculator|python' || true
+            bash "${GITHUB_WORKSPACE}/ci/android_runtime_test.sh"
 
       - name: Guardar diagnóstico de runtime
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: GNV-ANDROID-RUNTIME
-          path: android_runtime.log
+          path: |
+            android_runtime.log
+            package_dump.txt
+            activity_dump.txt
           if-no-files-found: warn
