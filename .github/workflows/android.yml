@@ -90,8 +90,9 @@ jobs:
           echo "=== FREETYPE SHA256 ==="
           sha256sum /tmp/freetype-2.14.1.tar.gz
           test "$(sha256sum /tmp/freetype-2.14.1.tar.gz | awk '{print $1}')" = "174d9e53402e1bf9ec7277e22ec199ba3e55a6be2c0740cb18c0ee9850fc8c34"
+          gzip -t /tmp/freetype-2.14.1.tar.gz
           tar -tzf /tmp/freetype-2.14.1.tar.gz >/dev/null
-          echo "FreeType 2.14.1: download, checksum e archive gzip validation OK"
+          echo "FreeType 2.14.1: download, checksum, gzip e archive validation OK"
 
       - name: Compilar APK GNV
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
