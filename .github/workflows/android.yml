@@ -169,43 +169,7 @@ jobs:
           disable-animations: true
           working-directory: ${{ github.workspace }}
           script: |
-            set -eu
-            APK=$(find "${GITHUB_WORKSPACE}/apk" -type f -name '*x86_64*.apk' -print -quit)
-            if [ -z "$APK" ]; then APK=$(find "${GITHUB_WORKSPACE}/apk" -type f -name '*.apk' -print -quit); fi
-            test -n "$APK"
-            echo "APK=$APK"
-            adb devices -l
-            adb install -r "$APK"
-            adb shell pm clear br.com.gaiochristiano.gnvcalculator || true
-            adb logcat -c
-            echo "=== INICIANDO APLICATIVO ==="
-            adb shell monkey -p br.com.gaiochristiano.gnvcalculator 1
-            sleep 5
-            echo "=== PROCESSO APÓS 5s ==="
-            pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
-            echo "PID=$pid"
-            if [ -z "$pid" ]; then
-              echo "APLICATIVO ENCERRADO DURANTE A INICIALIZAÇÃO"
-              adb logcat -d -v time > "${GITHUB_WORKSPACE}/android_runtime.log" || true
-              adb shell dumpsys package br.com.gaiochristiano.gnvcalculator > "${GITHUB_WORKSPACE}/package_dump.txt" || true
-              adb shell dumpsys activity activities > "${GITHUB_WORKSPACE}/activity_dump.txt" || true
-              exit 1
-            fi
-            sleep 20
-            echo "=== PROCESSO APÓS 25s ==="
-            pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
-            echo "PID=$pid"
-            if [ -z "$pid" ]; then
-              echo "APLICATIVO ENCERRADO ANTES DE 25s"
-              adb logcat -d -v time > "${GITHUB_WORKSPACE}/android_runtime.log" || true
-              adb shell dumpsys package br.com.gaiochristiano.gnvcalculator > "${GITHUB_WORKSPACE}/package_dump.txt" || true
-              adb shell dumpsys activity activities > "${GITHUB_WORKSPACE}/activity_dump.txt" || true
-              exit 1
-            fi
-            echo "APLICATIVO PERMANECEU EXECUTANDO POR 25s"
-            adb logcat -d -v time > "${GITHUB_WORKSPACE}/android_runtime.log" || true
-            adb shell dumpsys package br.com.gaiochristiano.gnvcalculator > "${GITHUB_WORKSPACE}/package_dump.txt" || true
-            adb shell dumpsys activity activities > "${GITHUB_WORKSPACE}/activity_dump.txt" || true
+            bash "${GITHUB_WORKSPACE}/ci/android_runtime_test.sh"
 
       - name: Publicar diagnóstico Android
         if: always()
