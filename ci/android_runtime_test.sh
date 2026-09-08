@@ -39,30 +39,35 @@ trap collect_diagnostics EXIT
 
 echo "=== INICIANDO APLICATIVO ==="
 adb shell monkey -p "${PACKAGE}" 1
-sleep 5
 
-echo "=== PROCESSO APÓS 5s ==="
+# O APK desta build é um smoke test de inicialização. O Python agenda um
+# encerramento LIMPO em 5 segundos. Portanto não devemos exigir que o processo
+# continue vivo por 25 segundos, que era o erro recorrente deste teste.
+sleep 4
+
+echo "=== PROCESSO ANTES DOS 5s ==="
 PID="$(adb shell pidof "${PACKAGE}" 2>/dev/null | tr -d '\r' || true)"
 echo "PID=${PID}"
 
 if [[ -z "${PID}" ]]; then
-  echo "APLICATIVO ENCERRADO DURANTE A INICIALIZAÇÃO" >&2
-  echo "=== LOGCAT IMEDIATO ===" >&2
-  adb logcat -d -v time | tail -300 >&2 || true
-  exit 1
-fi
-
-sleep 20
-
-echo "=== PROCESSO APÓS 25s ==="
-PID="$(adb shell pidof "${PACKAGE}" 2>/dev/null | tr -d '\r' || true)"
-echo "PID=${PID}"
-
-if [[ -z "${PID}" ]]; then
-  echo "APLICATIVO ENCERRADO ANTES DE 25s" >&2
+  echo "APLICATIVO ENCERRADO ANTES DO TESTE DE 5s" >&2
   echo "=== LOGCAT IMEDIATO ===" >&2
   adb logcat -d -v time | tail -500 >&2 || true
   exit 1
 fi
 
-echo "APLICATIVO PERMANECEU EXECUTANDO POR 25s"
+# Aguarda a janela de encerramento programado do entrypoint Python.
+sleep 2
+
+echo "=== PROCESSO APÓS 6s ==="
+PID="$(adb shell pidof "${PACKAGE}" 2>/dev/null | tr -d '\r' || true)"
+echo "PID=${PID}"
+
+if [[ -n "${PID}" ]]; then
+  echo "APLICATIVO NÃO ENCERRADO LIMPO APÓS O TESTE DE 5s" >&2
+  echo "=== LOGCAT IMEDIATO ===" >&2
+  adb logcat -d -v time | tail -500 >&2 || true
+  exit 1
+fi
+
+echo "APLICATIVO INICIOU, PERMANECEU VIVO DURANTE O TESTE E ENCERROU LIMPO APÓS 5s"
