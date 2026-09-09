@@ -15,10 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Python 3.12.9
+      - name: Python 3.11.9
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12.9'
+          python-version: '3.11.9'
 
       - name: Java 17
         uses: actions/setup-java@v5
@@ -28,46 +28,70 @@ jobs:
 
       - name: Dependencias Linux
         run: |
+          set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y build-essential git zip unzip autoconf automake autopoint libtool pkg-config cmake gettext libffi-dev libssl-dev libltdl-dev zlib1g-dev libncurses5-dev libncursesw5-dev
 
       - name: Instalar Buildozer
         run: |
           python -m pip install --upgrade 'pip<26.2' setuptools wheel
-          python -m pip install buildozer 'Cython==0.29.34'
+          python -m pip install buildozer==1.5.0 'Cython==0.29.34'
 
-      - name: Fixar p4a na release oficial v2026.05.09
+      - name: Fixar python-for-android oficial v2026.05.09
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
+          set -euxo pipefail
           rm -rf p4a .buildozer bin
           git clone --depth 1 --branch v2026.05.09 https://github.com/kivy/python-for-android.git p4a
           python - <<'PY'
           from pathlib import Path
           p = Path('p4a/pythonforandroid/build.py')
-          s = p.read_text()
+          s = p.read_text(encoding='utf-8')
           s = s.replace('pip install -U pip', 'python -m pip --version')
-          p.write_text(s)
+          p.write_text(s, encoding='utf-8')
           PY
-          git -C p4a rev-parse HEAD
+          test "$(git -C p4a rev-parse --short HEAD)" = "58d2114"
+          grep -n '^requirements\|^android.api\|^android.minapi\|^android.ndk\|^version' buildozer.spec
 
       - name: Verificar source e sintaxe
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
+          set -euxo pipefail
           python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
-          grep -n '^requirements\|^android.api\|^android.minapi\|^android.ndk\|^version' buildozer.spec
 
-      - name: Compilar APK
+      - name: Compilar APK limpo
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
+          set -o pipefail
           buildozer -v android debug 2>&1 | tee runtime_build.log
+          apk_file=$(find bin -maxdepth 1 -type f -name '*.apk' | head -1)
+          test -n "$apk_file"
+          echo "APK=$apk_file"
+          # O erro anterior era de inicializacao do Python antes do main.py.
+          # Verificamos fisicamente se a biblioteca encodings foi empacotada.
+          unzip -l "$apk_file" | grep -E 'assets/.*/python3\.11.*/encodings/__init__\.py$|assets/.*/python3\.11.*/encodings/' | head -20
+          unzip -l "$apk_file" | grep -qE 'python3\.11.*/encodings/__init__\.py$'
+
+      - name: Publicar APK de teste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GNV-ANDROID11-PYTHON311
+          path: |
+            GNV_V28_27_ANDROID_BUILD_FIX/bin/*.apk
+            GNV_V28_27_ANDROID_BUILD_FIX/runtime_build.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Instalar ferramentas do emulator Android 12
         run: |
+          set -euxo pipefail
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platform-tools' 'emulator' 'platforms;android-31' 'system-images;android-31;google_apis;x86_64'
 
       - name: Criar e iniciar emulator Android 12
         run: |
+          set -euxo pipefail
           echo 'no' | avdmanager create avd -n gnv-api31 -k 'system-images;android-31;google_apis;x86_64' --force
           emulator -avd gnv-api31 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect > emulator.log 2>&1 &
           adb wait-for-device
@@ -76,37 +100,42 @@ jobs:
             [ "$booted" = '1' ] && break
             sleep 2
           done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = '1'
           adb shell getprop ro.build.version.release
           adb shell getprop ro.build.version.sdk
 
-      - name: Instalar APK e executar por 30 segundos
+      - name: Instalar APK e validar inicializacao real
         working-directory: GNV_V28_27_ANDROID_BUILD_FIX
         run: |
-          apk_file=$(find bin -type f -name '*.apk' | head -1)
+          set -euxo pipefail
+          apk_file=$(find bin -maxdepth 1 -type f -name '*.apk' | head -1)
           test -n "$apk_file"
           adb install -r "$apk_file"
+          adb shell pm clear br.com.gaiochristiano.gnvcalculator >/dev/null 2>&1 || true
           adb logcat -c
           adb shell monkey -p br.com.gaiochristiano.gnvcalculator 1
-          sleep 30
-          adb logcat -d > runtime_android12.log
-          echo '========== LOG DE ERRO =========='
-          grep -nEi 'FATAL EXCEPTION|Fatal signal|SIGSEGV|SIGABRT|UnsatisfiedLinkError|ImportError|ModuleNotFoundError|Traceback|Python.*Error|Process.*died|dlopen failed|could not find' runtime_android12.log || true
-          echo '========== KIVY/PYTHON =========='
-          grep -nEi 'kivy|python|sdl|main.py|GNV' runtime_android12.log | tail -250 || true
+          sleep 12
+          adb logcat -d -v time > runtime_android12.log
+          echo '========== ERROS DE RUNTIME =========='
+          grep -nEi 'FATAL EXCEPTION|Fatal Python|init_fs_encoding|failed to get the Python codec|No module named .encodings.|Fatal signal|SIGSEGV|SIGABRT|UnsatisfiedLinkError|ImportError|ModuleNotFoundError|Traceback|dlopen failed|Process.*died' runtime_android12.log || true
+          echo '========== PYTHON/KIVY =========='
+          grep -nEi 'python|kivy|sdl|main.py|GNV' runtime_android12.log | tail -250 || true
           echo '========== ATIVIDADE =========='
           adb shell dumpsys activity activities | grep -E 'mResumedActivity|br.com.gaiochristiano.gnvcalculator' || true
-          if grep -qEi 'FATAL EXCEPTION|Fatal signal|SIGSEGV|SIGABRT|UnsatisfiedLinkError|ImportError|ModuleNotFoundError|Traceback|dlopen failed' runtime_android12.log; then
-            echo 'FAIL: crash detectado no Android 12 emulator'
+          if grep -qEi 'Fatal Python|init_fs_encoding|failed to get the Python codec|No module named .encodings.|FATAL EXCEPTION|Fatal signal|SIGSEGV|SIGABRT|UnsatisfiedLinkError|ImportError|ModuleNotFoundError|Traceback|dlopen failed' runtime_android12.log; then
+            echo 'FAIL: o APK ainda falha no runtime'
             exit 1
           fi
+          pid=$(adb shell pidof br.com.gaiochristiano.gnvcalculator 2>/dev/null | tr -d '\r' || true)
+          test -n "$pid"
+          echo "PASS: aplicativo permanece em execucao apos 12s; PID=$pid"
 
-      - name: Publicar logs
+      - name: Publicar diagnostico Android 12
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: GNV-ANDROID12-RUNTIME-DIAGNOSTICO
+          name: GNV-ANDROID12-RUNTIME-PY311
           path: |
-            GNV_V28_27_ANDROID_BUILD_FIX/runtime_build.log
             GNV_V28_27_ANDROID_BUILD_FIX/runtime_android12.log
             emulator.log
           if-no-files-found: warn
