@@ -17,10 +17,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Python 3.12.9
+      - name: Python 3.11.9
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12.9"
+          python-version: "3.11.9"
           cache: pip
 
       - name: Dependencias Linux
@@ -40,9 +40,6 @@ jobs:
           test -f GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
           test -f buildozer.spec
           python -m py_compile main.py GNV14_REPARADO_V28_27_CORRIGIDO_CARD_FISICO_ANP_Z.py
-
-          # Pillow e usado pelo aplicativo (geracao de imagens de resultados), portanto
-          # a dependencia NAO pode ser removida do buildozer.spec.
           grep -R -nE '(^|[[:space:]])(from|import)[[:space:]]+PIL' --include='*.py' .
 
           rm -rf p4a
@@ -63,7 +60,12 @@ jobs:
           PY
 
           sed -i '/^[[:space:]]*android\.archs[[:space:]]*=/c\android.archs = arm64-v8a,x86_64' buildozer.spec
+          echo '=== Python usado pelo CI ==='
+          python --version
+          echo '=== Requisitos Android ==='
           grep -E '^(requirements|android\.archs|android\.api|android\.minapi|p4a\.)' buildozer.spec
+          grep -q 'python3==3.11.9' buildozer.spec
+          grep -q 'hostpython3==3.11.9' buildozer.spec
           git -C p4a rev-parse HEAD
           test "$(git -C p4a rev-parse HEAD)" = "58d21141f17c889bf8585f5665921d72028f8831"
 
