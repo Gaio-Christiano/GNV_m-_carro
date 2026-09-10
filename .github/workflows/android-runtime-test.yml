@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'GNV_V28_27_ANDROID_BUILD_FIX/**'
+      - 'ci/android_runtime_test.sh'
       - '.github/workflows/android-runtime-test.yml'
 
 jobs:
@@ -67,9 +68,7 @@ jobs:
           apk_file=$(find bin -maxdepth 1 -type f -name '*.apk' | head -1)
           test -n "$apk_file"
           echo "APK=$apk_file"
-          # O erro anterior era de inicializacao do Python antes do main.py.
-          # Verificamos fisicamente se a biblioteca encodings foi empacotada.
-          unzip -l "$apk_file" | grep -E 'assets/.*/python3\.11.*/encodings/__init__\.py$|assets/.*/python3\.11.*/encodings/' | head -20
+          unzip -l "$apk_file" | grep -E 'assets/.*/python3\.11.*/encodings/' | head -20
           unzip -l "$apk_file" | grep -qE 'python3\.11.*/encodings/__init__\.py$'
 
       - name: Publicar APK de teste
