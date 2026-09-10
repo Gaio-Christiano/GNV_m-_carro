@@ -40,34 +40,45 @@ trap collect_diagnostics EXIT
 echo "=== INICIANDO APLICATIVO ==="
 adb shell monkey -p "${PACKAGE}" 1
 
-# O APK desta build é um smoke test de inicialização. O Python agenda um
-# encerramento LIMPO em 5 segundos. Portanto não devemos exigir que o processo
-# continue vivo por 25 segundos, que era o erro recorrente deste teste.
-sleep 4
+# O app é o APK real e não deve ser encerrado automaticamente.
+# O teste verifica se o processo sobrevive ao tempo de inicialização e se
+# não existem sinais conhecidos de crash no logcat.
+sleep 5
 
-echo "=== PROCESSO ANTES DOS 5s ==="
+echo "=== PROCESSO APÓS 5s ==="
 PID="$(adb shell pidof "${PACKAGE}" 2>/dev/null | tr -d '\r' || true)"
 echo "PID=${PID}"
 
 if [[ -z "${PID}" ]]; then
-  echo "APLICATIVO ENCERRADO ANTES DO TESTE DE 5s" >&2
-  echo "=== LOGCAT IMEDIATO ===" >&2
-  adb logcat -d -v time | tail -500 >&2 || true
+  echo "FAIL: aplicativo encerrou antes de 5s" >&2
+  echo "=== LOGCAT DE FALHA ===" >&2
+  adb logcat -d -v time | tail -800 >&2 || true
   exit 1
 fi
 
-# Aguarda a janela de encerramento programado do entrypoint Python.
-sleep 2
+sleep 10
 
-echo "=== PROCESSO APÓS 6s ==="
+echo "=== PROCESSO APÓS 15s ==="
 PID="$(adb shell pidof "${PACKAGE}" 2>/dev/null | tr -d '\r' || true)"
 echo "PID=${PID}"
 
-if [[ -n "${PID}" ]]; then
-  echo "APLICATIVO NÃO ENCERRADO LIMPO APÓS O TESTE DE 5s" >&2
-  echo "=== LOGCAT IMEDIATO ===" >&2
-  adb logcat -d -v time | tail -500 >&2 || true
+LOGTMP="$(mktemp)"
+adb logcat -d -v time > "${LOGTMP}" || true
+
+if grep -qEi 'Fatal Python|init_fs_encoding|failed to get the Python codec|No module named .encodings.|FATAL EXCEPTION|Fatal signal|SIGSEGV|SIGABRT|UnsatisfiedLinkError|ImportError|ModuleNotFoundError|Traceback|dlopen failed' "${LOGTMP}"; then
+  echo "FAIL: encontrado erro fatal de runtime no logcat" >&2
+  grep -nEi 'Fatal Python|init_fs_encoding|failed to get the Python codec|No module named .encodings.|FATAL EXCEPTION|Fatal signal|SIGSEGV|SIGABRT|UnsatisfiedLinkError|ImportError|ModuleNotFoundError|Traceback|dlopen failed' "${LOGTMP}" >&2 || true
   exit 1
 fi
 
-echo "APLICATIVO INICIOU, PERMANECEU VIVO DURANTE O TESTE E ENCERROU LIMPO APÓS 5s"
+if [[ -z "${PID}" ]]; then
+  echo "FAIL: aplicativo morreu entre 5s e 15s" >&2
+  echo "=== LOGCAT DE FALHA ===" >&2
+  tail -1000 "${LOGTMP}" >&2 || true
+  exit 1
+fi
+
+echo "PASS: aplicativo permanece em execução após 15s; PID=${PID}"
+echo "=== LOGCAT PYTHON/KIVY ==="
+grep -nEi 'python|kivy|sdl|main.py|GNV' "${LOGTMP}" | tail -250 || true
+rm -f "${LOGTMP}"
