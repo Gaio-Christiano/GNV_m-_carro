@@ -10,9 +10,10 @@ source.exclude_dirs = .buildozer,bin,__pycache__,tests,p4a
 version = 28.46
 
 # Python 3.11: python3 e hostpython3 precisam ser EXATAMENTE a mesma versao.
-# O build anterior falhou porque python3=3.11.9 foi combinado com hostpython3=3.14.2.
-# A build anterior em 3.12 tambem abortou no Android antes de executar main.py.
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,filetype==1.2.0,openpyxl,pillow,fpdf2
+# fpdf2 foi retirado dos requirements Android porque o resolvedor do
+# python-for-android nao consegue resolver suas dependencias para a plataforma
+# Android e abortava a compilacao antes de gerar um APK novo.
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,filetype==1.2.0,openpyxl,pillow
 
 orientation = portrait
 fullscreen = 0
