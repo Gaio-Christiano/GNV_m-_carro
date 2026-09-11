@@ -69,7 +69,9 @@ jobs:
           test -n "$apk_file"
           echo "APK=$apk_file"
           unzip -l "$apk_file" | grep -E 'assets/.*/python3\.11.*/encodings/' | head -20
-          unzip -l "$apk_file" | grep -qE 'python3\.11.*/encodings/__init__\.py$'
+          # python-for-android pode empacotar a stdlib como .pyc compilado.
+          # O teste correto e garantir que encodings/__init__ exista como .py ou .pyc.
+          unzip -l "$apk_file" | grep -qE 'python3\.11.*/encodings/__init__\.py(c)?$'
 
       - name: Publicar APK de teste
         if: always()
