@@ -68,10 +68,12 @@ jobs:
           apk_file=$(find bin -maxdepth 1 -type f -name '*.apk' | head -1)
           test -n "$apk_file"
           echo "APK=$apk_file"
-          unzip -l "$apk_file" | grep -E 'assets/.*/python3\.11.*/encodings/' | head -20
+          echo '========== PYTHON 3.11 / ENCODINGS NO APK =========='
+          unzip -l "$apk_file" | grep -E 'assets/.*/python3\.11.*/encodings/' | head -30 || true
           # python-for-android pode empacotar a stdlib como .pyc compilado.
-          # O teste correto e garantir que encodings/__init__ exista como .py ou .pyc.
+          # Validamos .py ou .pyc, sem exigir que o arquivo-fonte .py esteja no APK.
           unzip -l "$apk_file" | grep -qE 'python3\.11.*/encodings/__init__\.py(c)?$'
+          echo 'PASS: encodings do Python 3.11 encontrado no APK'
 
       - name: Publicar APK de teste
         if: always()
@@ -102,6 +104,7 @@ jobs:
             sleep 2
           done
           test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = '1'
+          test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = '31'
           adb shell getprop ro.build.version.release
           adb shell getprop ro.build.version.sdk
 
